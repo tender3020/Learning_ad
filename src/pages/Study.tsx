@@ -1,0 +1,546 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
+import { useLearningStore } from "@/stores/useLearningStore";
+import { aiService } from "@/services/aiService";
+import WireframeSphere from "@/components/3d/WireframeSphere";
+import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
+import {
+  Send,
+  Loader2,
+  MessageCircle,
+  ChevronLeft,
+  CheckCircle,
+  Play,
+  Lock,
+  Sparkles,
+  GraduationCap,
+  X,
+  Menu,
+} from "lucide-react";
+
+export default function Study() {
+  const store = useLearningStore();
+
+  const [content, setContent] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [showQA, setShowQA] = useState(false);
+  const [showOutline, setShowOutline] = useState(false);
+  const [qaMessages, setQaMessages] = useState<Array<{ type: "user" | "ai"; text: string }>>([]);
+  const [isAiTyping, setIsAiTyping] = useState(false);
+  const [error, setError] = useState("");
+  const qaEndRef = useRef<HTMLDivElement>(null);
+  const studyMinutesRef = useRef(0); // 学习时长追踪（分钟）
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const { user } = useAuth();
+  const { data: plans, isLoading: plansLoading } = trpc.learning.getPlans.useQuery();
+  const { data: outlineData } = trpc.learning.getOutline.useQuery(
+    { planId: store.currentPlanId || 0 },
+    { enabled: !!store.currentPlanId }
+  );
+  const dbOutline = outlineData?.outline || [];
+  const planLearningType = (outlineData?.learningType as any) || "abstract_logic";
+  const { data: existingContent } = trpc.content.getContent.useQuery(
+    { planId: store.currentPlanId || 0, dayNumber: store.currentDay },
+    { enabled: !!store.currentPlanId }
+  );
+  // 查询当前计划的评估结果（skillLevel）
+  const { data: assessmentResult } = trpc.assessment.getByPlan.useQuery(
+    { planId: store.currentPlanId || 0 },
+    { enabled: !!store.currentPlanId }
+  );
+  // 查询当前天的问答历史（按天隔离）
+  const { data: qaHistory } = trpc.qa.getHistory.useQuery(
+    { planId: store.currentPlanId || 0, dayNumber: store.currentDay },
+    { enabled: !!store.currentPlanId }
+  );
+  const utils = trpc.useUtils();
+
+  const saveContent = trpc.content.saveContent.useMutation({
+    onSuccess: () => {
+      utils.content.getContent.invalidate({
+        planId: store.currentPlanId || 0,
+        dayNumber: store.currentDay,
+      });
+    },
+  });
+
+  // 优先使用数据库大纲（真相来源），store.outline 作为 loading 期间的 fallback
+  const effectiveOutline = dbOutline.length > 0
+    ? dbOutline
+    : store.outline;
+  const todayItem = effectiveOutline[store.currentDay - 1];
+
+  // 学习时长追踪：每60秒增加1分钟计数
+  useEffect(() => {
+    if (!store.currentPlanId || !todayItem) return;
+    timerRef.current = setInterval(() => {
+      studyMinutesRef.current += 1;
+    }, 60000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [store.currentPlanId, todayItem]);
+
+  // 组件卸载时提交学习时长
+  const recordStudy = trpc.mastery.recordStudy.useMutation();
+  useEffect(() => {
+    return () => {
+      const minutes = studyMinutesRef.current;
+      if (minutes > 0 && store.currentPlanId && todayItem) {
+        recordStudy.mutate({
+          planId: store.currentPlanId,
+          knowledgeName: todayItem.title,
+          minutes,
+          targetMinutes: todayItem.estimatedMinutes || 30,
+        });
+      }
+    };
+  }, []); // 空依赖：只在卸载时执行
+
+  // 答题提交后刷新掌握度数据
+  const handleQuizSubmitted = useCallback(() => {
+    if (store.currentPlanId) {
+      utils.mastery.getScores.invalidate({ planId: store.currentPlanId });
+      utils.mastery.getStats.invalidate({ planId: store.currentPlanId });
+    }
+  }, [store.currentPlanId, utils]);
+
+  // 自动恢复
+  const restorePlan = useCallback(() => {
+    if (!store.currentPlanId && plans && plans.length > 0) {
+      const latestPlan = plans[0];
+      store.restoreFromDB(
+        {
+          id: latestPlan.id,
+          goal: latestPlan.goal,
+          subject: latestPlan.subject,
+          totalDays: latestPlan.totalDays,
+          currentDay: latestPlan.currentDay,
+        },
+        user?.id || 0
+      );
+    }
+  }, [store, plans]);
+
+  useEffect(() => { restorePlan(); }, [restorePlan]);
+
+  useEffect(() => {
+    if (existingContent?.markdownContent) {
+      setContent(existingContent.markdownContent);
+    } else {
+      setContent("");
+    }
+  }, [existingContent, store.currentDay]);
+
+  const handleGenerateContent = async () => {
+    if (!todayItem || !store.currentPlanId) return;
+    setIsLoading(true);
+    setIsStreaming(true);
+    store.setContentLoading(true);
+    store.setStreaming(true);
+    setError("");
+
+    const prompt = `请为第${store.currentDay}天的学习目标生成详细的学习内容。
+
+学习主题：${todayItem.title}
+学习目标：${todayItem.goal}
+${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
+
+请用中文输出，使用 Markdown 格式，包含：
+1. 知识点详细讲解
+2. 代码示例（如适用）
+3. 实际应用场景
+4. 练习题目
+5. 小结`;
+
+    // 获取 skillLevel 和 learningType（未评估默认零基础 l1）
+    const skillLevel = assessmentResult?.skillLevel || "l1";
+    const learningType = planLearningType || "abstract_logic";
+
+    let fullText = "";
+    await aiService.streamContent(prompt, learningType, skillLevel, {
+      onToken: (token) => { fullText += token; setContent(fullText); },
+      onComplete: async (text) => {
+        setIsStreaming(false); setIsLoading(false);
+        store.setContentLoading(false); store.setStreaming(false);
+        try {
+          await saveContent.mutateAsync({
+            planId: store.currentPlanId!, outlineId: todayItem.dayNumber,
+            dayNumber: store.currentDay, markdownContent: text,
+          });
+        } catch (e: any) { console.error("保存失败:", e.message); }
+      },
+      onError: (err) => {
+        setIsStreaming(false); setIsLoading(false);
+        store.setContentLoading(false); store.setStreaming(false);
+        setError(`生成失败: ${err}`);
+      },
+    });
+  };
+
+  const handleAskQuestion = async () => {
+    if (!question.trim() || isAiTyping || !store.currentPlanId) return;
+    const userQuestion = question.trim();
+    setQaMessages((prev) => [...prev, { type: "user", text: userQuestion }]);
+    setQuestion("");
+    setIsAiTyping(true);
+    setError("");
+    try {
+      const context = todayItem ? `当前学习主题：${todayItem.title}，目标：${todayItem.goal}` : "";
+      const answer = await aiService.askAI(userQuestion, context);
+      setQaMessages((prev) => [...prev, { type: "ai", text: answer }]);
+      // 保存问答到数据库（按天隔离）
+      try {
+        const { qaId } = await utils.client.qa.ask.mutate({
+          planId: store.currentPlanId,
+          dayNumber: store.currentDay,
+          question: userQuestion,
+          context,
+        });
+        await utils.client.qa.saveAnswer.mutate({ qaId, answer });
+        utils.qa.getHistory.invalidate({
+          planId: store.currentPlanId,
+          dayNumber: store.currentDay,
+        });
+      } catch { /* silent: 保存失败不影响用户体验 */ }
+    } catch (err: any) {
+      setQaMessages((prev) => [...prev, { type: "ai", text: `抱歉，AI 服务暂时不可用。错误信息：${err.message || "未知错误"}` }]);
+    } finally { setIsAiTyping(false); }
+  };
+
+  // 当切换天或历史数据到达时，同步 qaMessages（按天隔离）
+  useEffect(() => {
+    if (qaHistory && qaHistory.length > 0) {
+      // 按时间正序排列（数据库返回倒序）
+      const sorted = [...qaHistory].reverse();
+      const messages: Array<{ type: "user" | "ai"; text: string }> = [];
+      for (const h of sorted) {
+        messages.push({ type: "user", text: h.question });
+        if (h.answer) {
+          messages.push({ type: "ai", text: h.answer });
+        }
+      }
+      setQaMessages(messages);
+    } else {
+      setQaMessages([]);
+    }
+  }, [qaHistory, store.currentDay]);
+
+  useEffect(() => { qaEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [qaMessages, isAiTyping]);
+
+  const goToDay = (day: number) => {
+    if (day >= 1 && day <= store.totalDays) {
+      store.setCurrentDay(day); setContent(""); setError(""); setShowOutline(false); setQaMessages([]);
+    }
+  };
+
+  if (plansLoading) {
+    return <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#6E56CF] border-t-transparent rounded-full animate-spin" /></div>;
+  }
+
+  if (!store.currentPlanId) {
+    return (
+      <div className="h-full flex items-center justify-center relative">
+        <WireframeSphere opacity={0.1} />
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 text-center max-w-md px-6">
+          <GraduationCap size={48} className="mx-auto mb-4 text-[#6E56CF]" />
+          <h2 className="text-xl md:text-2xl font-semibold text-[#F5F5F7] mb-2">还没有学习计划</h2>
+          <p className="text-sm text-[#8A8A8E] mb-6">让 AI 为你定制一个个性化的学习路径。</p>
+          <button onClick={() => window.location.href = "/onboarding"}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl font-medium transition-colors brand-glow">
+            <Sparkles size={18} /> 创建学习计划
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex relative">
+      <WireframeSphere opacity={0.08} />
+
+      {/* ===== 桌面端侧边大纲 (md 及以上) ===== */}
+      <div className="hidden md:flex w-60 lg:w-64 h-full liquid-glass border-r border-[rgba(255,255,255,0.05)] z-10 flex-col flex-shrink-0">
+        <div className="p-4 border-b border-[rgba(255,255,255,0.05)]">
+          <h2 className="text-sm font-medium text-[#8A8A8E] uppercase tracking-wider">学习大纲</h2>
+          <p className="text-xs text-[#8A8A8E] mt-1 truncate">{store.goal || "学习计划"}</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {effectiveOutline.map((item) => {
+            const isActive = item.dayNumber === store.currentDay;
+            const isCompleted = item.dayNumber < store.currentDay;
+            return (
+              <button key={item.dayNumber} onClick={() => goToDay(item.dayNumber)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
+                  isActive ? "bg-[rgba(110,86,207,0.15)] border border-[rgba(110,86,207,0.3)]" :
+                  "hover:bg-[rgba(255,255,255,0.03)] border border-transparent"
+                }`}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  isCompleted ? "bg-[rgba(52,199,89,0.2)]" : isActive ? "bg-[rgba(110,86,207,0.2)]" : "bg-[rgba(255,255,255,0.05)]"
+                }`}>
+                  {isCompleted ? <CheckCircle size={14} className="text-[#34C759]" /> :
+                   isActive ? <Play size={12} className="text-[#6E56CF]" /> :
+                   <Lock size={12} className="text-[#8A8A8E]" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium truncate ${isActive ? "text-[#F5F5F7]" : "text-[#8A8A8E]"}`}>
+                    D{item.dayNumber}: {item.title}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="p-4 border-t border-[rgba(255,255,255,0.05)] flex items-center justify-between">
+          <button onClick={() => goToDay(store.currentDay - 1)} disabled={store.currentDay <= 1}
+            className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-30 transition-all">
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-sm text-[#8A8A8E]">{store.currentDay} / {store.totalDays}</span>
+          <button onClick={() => goToDay(store.currentDay + 1)} disabled={store.currentDay >= store.totalDays}
+            className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-30 transition-all">
+            {/* Using ChevronRight via inline or simple arrow */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
+
+      {/* ===== 移动端：大纲底部抽屉 ===== */}
+      <AnimatePresence>
+        {showOutline && (
+          <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="md:hidden fixed bottom-0 left-0 right-0 h-[70vh] liquid-glass rounded-t-3xl z-40 flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-[rgba(255,255,255,0.05)]">
+              <h2 className="text-sm font-medium text-[#8A8A8E]">学习大纲</h2>
+              <button onClick={() => setShowOutline(false)} className="w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              {effectiveOutline.map((item) => {
+                const isActive = item.dayNumber === store.currentDay;
+                return (
+                  <button key={item.dayNumber} onClick={() => goToDay(item.dayNumber)}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all ${
+                      isActive ? "bg-[rgba(110,86,207,0.15)] border border-[rgba(110,86,207,0.3)]" :
+                      "hover:bg-[rgba(255,255,255,0.03)]"
+                    }`}>
+                    <span className={`text-xs font-medium ${isActive ? "text-[#6E56CF]" : "text-[#8A8A8E]"}`}>D{item.dayNumber}</span>
+                    <span className={`text-sm ${isActive ? "text-[#F5F5F7]" : "text-[#8A8A8E]"}`}>{item.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ===== 中间内容区域 ===== */}
+      <div className="flex-1 flex flex-col h-full z-10 min-w-0">
+        {/* Header */}
+        <div className="flex items-center justify-between px-2.5 md:px-6 py-2 md:py-4 border-b border-[rgba(255,255,255,0.05)] flex-shrink-0 gap-2">
+          {/* 移动端：大纲切换按钮 */}
+          <button onClick={() => setShowOutline(true)} className="md:hidden w-7 h-7 rounded-md bg-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+            <Menu size={14} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xs md:text-lg font-semibold text-[#F5F5F7] truncate">{todayItem?.title || "今日学习"}</h1>
+            <p className="text-[9px] md:text-xs text-[#8A8A8E] truncate">{todayItem?.goal}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {error && <span className="hidden sm:inline text-xs text-[#FF3B30]">{error}</span>}
+            <button onClick={() => setShowQA(!showQA)}
+              className={`flex items-center gap-1.5 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-medium transition-all ${
+                showQA ? "bg-[rgba(110,86,207,0.2)] text-[#A78BFA] border border-[rgba(110,86,207,0.3)]" :
+                "liquid-glass text-[#8A8A8E] hover:text-[#F5F5F7]"
+              }`}>
+              <MessageCircle size={14} />
+              <span className="hidden sm:inline">AI 问答</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 内容主体 */}
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <div className={`flex-1 overflow-y-auto p-3 md:p-6 ${showQA ? "" : "w-full"}`}>
+            {!content && !isLoading ? (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col items-center justify-center px-4">
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-[rgba(110,86,207,0.1)] flex items-center justify-center mb-4">
+                  <Sparkles size={24} className="text-[#6E56CF]" />
+                </div>
+                <h3 className="text-base md:text-lg font-semibold text-[#F5F5F7] mb-2 text-center">准备生成学习内容</h3>
+                <p className="text-xs md:text-sm text-[#8A8A8E] mb-4 md:mb-6 text-center max-w-md">AI 将为你生成关于「{todayItem?.title}」的个性化学习内容。</p>
+                <button onClick={handleGenerateContent}
+                  className="flex items-center gap-2 px-5 py-2.5 md:px-6 md:py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl font-medium text-sm transition-colors brand-glow">
+                  <Sparkles size={16} /> 生成学习内容
+                </button>
+              </motion.div>
+            ) : (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto">
+                {isLoading && !content ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 size={28} className="text-[#6E56CF] animate-spin mb-3" />
+                    <p className="text-sm text-[#8A8A8E]">AI 正在生成学习内容...</p>
+                    <p className="text-xs text-[#8A8A8E] mt-1">首次生成可能需要 10-30 秒</p>
+                  </div>
+                ) : (
+                  <MarkdownRenderer content={content} knowledgeName={todayItem?.title || ""} onQuizSubmitted={handleQuizSubmitted} />
+                )}
+                {isStreaming && (
+                  <div className="flex items-center gap-2 mt-4 text-[#6E56CF]">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-pulse" />
+                    <span className="text-xs">AI 正在输出...</span>
+                  </div>
+                )}
+                {content && !isStreaming && (
+                  <div className="mt-4 pt-3 border-t border-[rgba(255,255,255,0.05)]">
+                    <button onClick={() => { setContent(""); handleGenerateContent(); }}
+                      className="text-xs text-[#8A8A8E] hover:text-[#6E56CF] transition-colors">重新生成内容</button>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </div>
+
+          {/* ===== 桌面端 QA 侧边栏 ===== */}
+          <AnimatePresence>
+            {showQA && (
+              <motion.div initial={{ width: 0, opacity: 0 }} animate={{ width: 360, opacity: 1 }} exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }} className="hidden lg:flex border-l border-[rgba(255,255,255,0.05)] flex-col bg-[rgba(0,0,0,0.3)] flex-shrink-0 overflow-hidden">
+                <div className="p-4 border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-[rgba(110,86,207,0.15)]">
+                    <img src="/ai-avatar.png" alt="AI" className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-[#F5F5F7]">AI 学习导师</h3>
+                    <p className="text-[10px] text-[#8A8A8E]">AI 学习导师</p>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+                  {qaMessages.length === 0 && (
+                    <div className="text-center py-10">
+                      <MessageCircle size={28} className="mx-auto mb-2 text-[#8A8A8E]" />
+                      <p className="text-xs text-[#8A8A8E]">有任何问题都可以问我</p>
+                    </div>
+                  )}
+                  {qaMessages.map((msg, i) => (
+                    <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                      className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${
+                        msg.type === "user" ? "bg-[#6E56CF] text-white rounded-br-md" : "liquid-glass text-[#E0E0E5] rounded-bl-md"
+                      }`}>
+                        <MarkdownRenderer content={msg.text} />
+                      </div>
+                    </motion.div>
+                  ))}
+                  {isAiTyping && (
+                    <div className="flex justify-start">
+                      <div className="liquid-glass px-4 py-3 rounded-2xl rounded-bl-md">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={qaEndRef} />
+                </div>
+                <div className="p-4 border-t border-[rgba(255,255,255,0.05)] flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAskQuestion()}
+                      placeholder="输入问题..." className="flex-1 px-4 py-2.5 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all" />
+                    <button onClick={handleAskQuestion} disabled={!question.trim() || isAiTyping}
+                      className="p-2.5 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl transition-colors">
+                      <Send size={16} />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* ===== 移动端：QA 全屏弹层 ===== */}
+      <AnimatePresence>
+        {showQA && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="lg:hidden fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: 'var(--bg-primary)' }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(255,255,255,0.05)] flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-[rgba(110,86,207,0.15)]">
+                  <img src="/ai-avatar.png" alt="AI" className="w-full h-full object-cover" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-[#F5F5F7]">AI 学习导师</h3>
+                  <p className="text-[10px] text-[#8A8A8E]">智能问答</p>
+                </div>
+              </div>
+              <button onClick={() => setShowQA(false)} className="w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+              {qaMessages.length === 0 && (
+                <div className="text-center py-10">
+                  <MessageCircle size={32} className="mx-auto mb-3 text-[#8A8A8E]" />
+                  <p className="text-sm text-[#8A8A8E] mb-1">有任何问题都可以问我</p>
+                  <p className="text-xs text-[#8A8A8E]">我会结合当前学习内容为你解答</p>
+                </div>
+              )}
+              {qaMessages.map((msg, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${
+                    msg.type === "user" ? "bg-[#6E56CF] text-white rounded-br-md" : "liquid-glass text-[#E0E0E5] rounded-bl-md"
+                  }`}>
+                    <MarkdownRenderer content={msg.text} />
+                  </div>
+                </motion.div>
+              ))}
+              {isAiTyping && (
+                <div className="flex justify-start">
+                  <div className="liquid-glass px-4 py-3 rounded-2xl rounded-bl-md">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={qaEndRef} />
+            </div>
+            <div className="p-4 border-t border-[rgba(255,255,255,0.05)] flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAskQuestion()}
+                  placeholder="输入问题..." className="flex-1 px-4 py-3 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all" />
+                <button onClick={handleAskQuestion} disabled={!question.trim() || isAiTyping}
+                  className="p-3 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl transition-colors">
+                  <Send size={18} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 移动端大纲弹层遮罩 */}
+      <AnimatePresence>
+        {showOutline && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="md:hidden fixed inset-0 bg-black/40 z-30" onClick={() => setShowOutline(false)} />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

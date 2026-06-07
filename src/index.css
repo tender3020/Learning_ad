@@ -1,0 +1,410 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Inter';
+  src: url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+}
+
+:root {
+  /* Dark mode as default */
+  --bg-primary: #050505;
+  --bg-secondary: #0A0A0A;
+  --text-primary: #F5F5F7;
+  --text-secondary: #8A8A8E;
+  --text-tertiary: #E0E0E5;
+  --glass-bg-start: rgba(255,255,255,0.05);
+  --glass-bg-end: rgba(255,255,255,0.01);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-hover: rgba(255, 255, 255, 0.18);
+  --glass-bg-hover-start: rgba(255,255,255,0.07);
+  --glass-bg-hover-end: rgba(255,255,255,0.03);
+  --glass-edge-opacity: 0.15;
+  --glass-highlight: rgba(255, 255, 255, 0.12);
+  --glass-soft: rgba(255, 255, 255, 0.06);
+  --code-bg: rgba(110, 86, 207, 0.15);
+  --code-color: #A78BFA;
+  --pre-bg: rgba(255, 255, 255, 0.03);
+  --pre-border: rgba(255, 255, 255, 0.08);
+  --pre-code-color: #E0E0E5;
+  --li-color: #E0E0E5;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  --table-border: rgba(255, 255, 255, 0.08);
+  --table-th-bg: rgba(255, 255, 255, 0.03);
+
+  --background: 0 0% 2%;
+  --foreground: 0 0% 96%;
+  --card: 0 0% 4%;
+  --card-foreground: 0 0% 96%;
+  --popover: 0 0% 4%;
+  --popover-foreground: 0 0% 96%;
+  --primary: 255 255% 100%;
+  --primary-foreground: 0 0% 2%;
+  --secondary: 0 0% 10%;
+  --secondary-foreground: 0 0% 96%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 0 0% 55%;
+  --accent: 252 56% 57%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 14%;
+  --input: 0 0% 14%;
+  --ring: 252 56% 57%;
+  --radius: 0.75rem;
+  --chart-1: 252 56% 57%;
+  --chart-2: 160 84% 39%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+  --sidebar-background: 0 0% 3%;
+  --sidebar-foreground: 0 0% 90%;
+  --sidebar-primary: 252 56% 57%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 10%;
+  --sidebar-accent-foreground: 0 0% 90%;
+  --sidebar-border: 0 0% 12%;
+  --sidebar-ring: 252 56% 57%;
+}
+
+/* ============ Light Theme ============ */
+.theme-light {
+  --bg-primary: #F2F2F7;
+  --bg-secondary: #FFFFFF;
+  --text-primary: #1C1C1E;
+  --text-secondary: #8E8E93;
+  --text-tertiary: #3A3A3C;
+  --glass-bg-start: rgba(255,255,255,0.7);
+  --glass-bg-end: rgba(255,255,255,0.4);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-hover: rgba(0, 0, 0, 0.15);
+  --glass-bg-hover-start: rgba(255,255,255,0.9);
+  --glass-bg-hover-end: rgba(255,255,255,0.6);
+  --glass-edge-opacity: 0.3;
+  --glass-highlight: rgba(0, 0, 0, 0.06);
+  --glass-soft: rgba(0, 0, 0, 0.03);
+  --code-bg: rgba(110, 86, 207, 0.1);
+  --code-color: #5A45B0;
+  --pre-bg: rgba(0, 0, 0, 0.03);
+  --pre-border: rgba(0, 0, 0, 0.08);
+  --pre-code-color: #3A3A3C;
+  --li-color: #3A3A3C;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+  --table-border: rgba(0, 0, 0, 0.1);
+  --table-th-bg: rgba(0, 0, 0, 0.03);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Liquid Glass Effect */
+.liquid-glass {
+  background: linear-gradient(180deg, var(--glass-bg-start) 0%, var(--glass-bg-end) 100%);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.25) 0%,
+    rgba(255, 255, 255, 0.08) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.08) 80%,
+    rgba(255, 255, 255, 0.25) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: var(--glass-edge-opacity);
+}
+
+.liquid-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 90% 40% at 50% 0%, var(--glass-highlight) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 35% at 65% 10%, var(--glass-soft) 0%, transparent 50%);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* Liquid Glass Hover */
+.liquid-glass-hover {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+}
+
+.liquid-glass-hover:hover {
+  background: linear-gradient(180deg, var(--glass-bg-hover-start) 0%, var(--glass-bg-hover-end) 100%);
+  border-color: var(--glass-border-hover);
+  transform: translateY(-2px);
+}
+
+/* Brand Glow */
+.brand-glow {
+  box-shadow: 0 8px 32px rgba(110, 86, 207, 0.15);
+}
+
+/* Typing cursor animation */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.typing-cursor::after {
+  content: '|';
+  animation: blink 1s infinite;
+  color: #6E56CF;
+  font-weight: 300;
+}
+
+/* Markdown styles - use CSS variables for theme support */
+.markdown-body {
+  line-height: 1.8;
+}
+
+.markdown-body h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 1.5rem 0 1rem;
+  color: var(--text-primary);
+}
+
+.markdown-body h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.75rem;
+  color: var(--text-primary);
+}
+
+.markdown-body h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+  color: var(--text-primary);
+}
+
+.markdown-body p {
+  margin: 0.75rem 0;
+  color: var(--text-tertiary);
+}
+
+.markdown-body code {
+  background: var(--code-bg);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: var(--code-color);
+}
+
+.markdown-body pre {
+  background: var(--pre-bg);
+  border: 1px solid var(--pre-border);
+  border-radius: 12px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+  color: var(--pre-code-color);
+}
+
+.markdown-body ul, .markdown-body ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+.markdown-body li {
+  margin: 0.35rem 0;
+  color: var(--li-color);
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid #6E56CF;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.markdown-body th, .markdown-body td {
+  padding: 0.5rem;
+  border: 1px solid var(--table-border);
+  text-align: left;
+}
+
+.markdown-body th {
+  background: var(--table-th-bg);
+  font-weight: 600;
+}
+
+/* Calendar burst animation */
+@keyframes carousel-spin {
+  0% {
+    transform: rotateY(0deg) translateZ(200px) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: rotateY(180deg) translateZ(50px) scale(0.5);
+    opacity: 0.5;
+  }
+  100% {
+    transform: rotateY(360deg) translateZ(200px) scale(1);
+    opacity: 1;
+  }
+}
+
+.day-card {
+  position: absolute;
+  width: 50px;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  box-shadow: 0 4px 15px rgba(110, 86, 207, 0.3);
+  animation: carousel-spin 5s infinite linear;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: #0A0A0A;
+}
+
+/* Progress ring */
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.5s ease-in-out;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+/* Pulse animation for AI status */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(110, 86, 207, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(110, 86, 207, 0.6);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ============ Light Mode Overrides for Tailwind Arbitrary Values ============ */
+/* These override hardcoded dark-theme Tailwind classes when .theme-light is active */
+
+.theme-light .text-\[\#F5F5F7\] { color: #1C1C1E !important; }
+.theme-light .text-\[\#E0E0E5\] { color: #3A3A3C !important; }
+.theme-light .text-\[\#8A8A8E\] { color: #636366 !important; }
+.theme-light .bg-\[\#050505\] { background-color: #F2F2F7 !important; }
+.theme-light .bg-\[\#0A0A0A\] { background-color: #FFFFFF !important; }
+.theme-light .bg-\[\#050505\]\/80 { background-color: rgb(242 242 247 / 0.8) !important; }
+.theme-light .bg-\[\#0A0A0A\]\/90 { background-color: rgb(255 255 255 / 0.9) !important; }
+.theme-light .border-\[rgba\(255\,255\,255\,0\.05\)\] { border-color: rgba(0,0,0,0.06) !important; }
+.theme-light .border-\[rgba\(255\,255\,255\,0\.06\)\] { border-color: rgba(0,0,0,0.08) !important; }
+.theme-light .border-\[rgba\(255\,255\,255\,0\.1\)\] { border-color: rgba(0,0,0,0.1) !important; }
+.theme-light .bg-\[rgba\(255\,255\,255\,0\.03\)\] { background-color: rgba(0,0,0,0.03) !important; }
+.theme-light .bg-\[rgba\(255\,255\,255\,0\.05\)\] { background-color: rgba(0,0,0,0.05) !important; }
+.theme-light .hover\:bg-\[rgba\(255\,255\,255\,0\.03\)\]:hover { background-color: rgba(0,0,0,0.05) !important; }
+.theme-light .hover\:bg-\[rgba\(255\,255\,255\,0\.05\)\]:hover { background-color: rgba(0,0,0,0.07) !important; }
+.theme-light .hover\:text-\[\#F5F5F7\]:hover { color: #1C1C1E !important; }
+
+/* Markdown overrides for light theme */
+.theme-light .markdown-body p { color: #3A3A3C; }
+.theme-light .markdown-body li { color: #3A3A3C; }
+
+/* Scrollbar for light theme */
+.theme-light ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); }
+.theme-light ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+
+/* ============ KaTeX Math Formula Overrides ============ */
+/* 暗色主题下的公式颜色 */
+.markdown-body .katex {
+  color: var(--text-primary);
+  font-size: 1.05em;
+}
+
+.markdown-body .katex-display {
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.markdown-body .katex-display .katex {
+  font-size: 1.1em;
+}
+
+/* 行内公式 */
+.markdown-body .katex-inline {
+  font-size: 0.95em;
+}
+
+/* 确保公式可滚动 */
+.markdown-body .katex-display > .katex {
+  white-space: nowrap;
+}
+
+/* 浅色主题公式颜色 */
+.theme-light .markdown-body .katex {
+  color: #1C1C1E;
+}
