@@ -4,6 +4,8 @@ import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { useLearningStore } from "@/stores/useLearningStore";
 import { aiService } from "@/services/aiService";
+import { useTtsPlayer } from "@/hooks/useTtsPlayer";
+import TtsButton from "@/components/TtsButton";
 import WireframeSphere from "@/components/3d/WireframeSphere";
 import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
 import {
@@ -35,6 +37,7 @@ export default function Study() {
   const qaEndRef = useRef<HTMLDivElement>(null);
   const studyMinutesRef = useRef(0); // 学习时长追踪（分钟）
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tts = useTtsPlayer();
 
   const { user } = useAuth();
   const { data: plans, isLoading: plansLoading } = trpc.learning.getPlans.useQuery();
@@ -74,6 +77,10 @@ export default function Study() {
     ? dbOutline
     : store.outline;
   const todayItem = effectiveOutline[store.currentDay - 1];
+  const contentTtsId = `content-day-${store.currentDay}`;
+  const contentSpeechText = todayItem && content
+    ? `${todayItem.title}。${content}`
+    : content;
 
   // 学习时长追踪：每60秒增加1分钟计数
   useEffect(() => {
@@ -235,6 +242,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
 
   const goToDay = (day: number) => {
     if (day >= 1 && day <= store.totalDays) {
+      tts.stop();
       store.setCurrentDay(day); setContent(""); setError(""); setShowOutline(false); setQaMessages([]);
     }
   };
@@ -354,7 +362,22 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
             <p className="text-[9px] md:text-xs text-[#8A8A8E] truncate">{todayItem?.goal}</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {error && <span className="hidden sm:inline text-xs text-[#FF3B30]">{error}</span>}
+            {(error || tts.error) && (
+              <span className="hidden sm:inline text-xs text-[#FF3B30] max-w-[200px] truncate">
+                {error || tts.error}
+              </span>
+            )}
+            {content && !isStreaming && (
+              <TtsButton
+                id={contentTtsId}
+                text={contentSpeechText}
+                status={tts.getStatus(contentTtsId)}
+                onPlay={tts.play}
+                label={tts.progress && tts.activeId === contentTtsId
+                  ? `${tts.progress.current}/${tts.progress.total}`
+                  : "朗读"}
+              />
+            )}
             <button onClick={() => setShowQA(!showQA)}
               className={`flex items-center gap-1.5 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-medium transition-all ${
                 showQA ? "bg-[rgba(110,86,207,0.2)] text-[#A78BFA] border border-[rgba(110,86,207,0.3)]" :
@@ -432,10 +455,20 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                   {qaMessages.map((msg, i) => (
                     <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                       className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${
-                        msg.type === "user" ? "bg-[#6E56CF] text-white rounded-br-md" : "liquid-glass text-[#E0E0E5] rounded-bl-md"
-                      }`}>
-                        <MarkdownRenderer content={msg.text} />
+                      <div className={`flex flex-col gap-1 max-w-[85%] ${msg.type === "user" ? "items-end" : "items-start"}`}>
+                        <div className={`px-4 py-3 rounded-2xl text-sm ${
+                          msg.type === "user" ? "bg-[#6E56CF] text-white rounded-br-md" : "liquid-glass text-[#E0E0E5] rounded-bl-md"
+                        }`}>
+                          <MarkdownRenderer content={msg.text} />
+                        </div>
+                        {msg.type === "ai" && (
+                          <TtsButton
+                            id={`qa-${i}`}
+                            text={msg.text}
+                            status={tts.getStatus(`qa-${i}`)}
+                            onPlay={tts.play}
+                          />
+                        )}
                       </div>
                     </motion.div>
                   ))}
@@ -499,10 +532,20 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
               {qaMessages.map((msg, i) => (
                 <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${
-                    msg.type === "user" ? "bg-[#6E56CF] text-white rounded-br-md" : "liquid-glass text-[#E0E0E5] rounded-bl-md"
-                  }`}>
-                    <MarkdownRenderer content={msg.text} />
+                  <div className={`flex flex-col gap-1 max-w-[85%] ${msg.type === "user" ? "items-end" : "items-start"}`}>
+                    <div className={`px-4 py-3 rounded-2xl text-sm ${
+                      msg.type === "user" ? "bg-[#6E56CF] text-white rounded-br-md" : "liquid-glass text-[#E0E0E5] rounded-bl-md"
+                    }`}>
+                      <MarkdownRenderer content={msg.text} />
+                    </div>
+                    {msg.type === "ai" && (
+                      <TtsButton
+                        id={`qa-mobile-${i}`}
+                        text={msg.text}
+                        status={tts.getStatus(`qa-mobile-${i}`)}
+                        onPlay={tts.play}
+                      />
+                    )}
                   </div>
                 </motion.div>
               ))}

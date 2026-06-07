@@ -8,6 +8,7 @@ import { createContext } from "./context";
 import { env } from "./lib/env";
 import { getUserFromRequest } from "./lib/request-auth";
 import { streamContent } from "./services/aiService";
+import { synthesizeSpeech, streamSpeechSegments } from "./lib/volcengine-tts";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -83,6 +84,92 @@ app.post("/api/ai/stream", async (c) => {
     const message = error instanceof Error ? error.message : "未知错误";
     return c.json({ error: message }, 500);
   }
+});
+
+const ttsInputSchema = z.object({
+  text: z.string().min(1).max(8000),
+});
+
+app.post("/api/tts/speak", async (c) => {
+  const user = await getUserFromRequest(c.req.raw);
+  if (!user) {
+    return c.json({ error: "请先登录" }, 401);
+  }
+
+  let body: z.infer<typeof ttsInputSchema>;
+  try {
+    body = ttsInputSchema.parse(await c.req.json());
+  } catch {
+    return c.json({ error: "请求参数无效" }, 400);
+  }
+
+  try {
+    const audio = await synthesizeSpeech(body.text);
+    return new Response(audio, {
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "语音合成失败";
+    return c.json({ error: message }, 500);
+  }
+});
+
+app.post("/api/tts/stream", async (c) => {
+  const user = await getUserFromRequest(c.req.raw);
+  if (!user) {
+    return c.json({ error: "请先登录" }, 401);
+  }
+
+  let body: z.infer<typeof ttsInputSchema>;
+  try {
+    body = ttsInputSchema.parse(await c.req.json());
+  } catch {
+    return c.json({ error: "请求参数无效" }, 400);
+  }
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const segment of streamSpeechSegments(body.text)) {
+          if (c.req.raw.signal.aborted) break;
+
+          const payload = JSON.stringify({
+            index: segment.index,
+            total: segment.total,
+            audio: segment.audio.toString("base64"),
+          });
+          controller.enqueue(
+            encoder.encode(`event: segment\ndata: ${payload}\n\n`),
+          );
+        }
+        if (!c.req.raw.signal.aborted) {
+          controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "语音合成失败";
+        controller.enqueue(
+          encoder.encode(
+            `event: error\ndata: ${JSON.stringify({ error: message })}\n\n`,
+          ),
+        );
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 });
 
 // 生产环境静态文件服务
