@@ -220,18 +220,65 @@ export async function generateAssessmentQuestions(
   return getDefaultAssessmentQuestions(goal);
 }
 
-export async function askAI(question: string, context: string): Promise<string> {
+export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+export interface DayQAContext {
+  planGoal: string;
+  dayNumber: number;
+  dayTitle: string;
+  dayGoal: string;
+  learningType: string;
+  markdownContent: string;
+}
+
+export function buildQASystemPrompt(ctx: DayQAContext): string {
+  const typeLabel =
+    ({
+      abstract_logic: "抽象逻辑型",
+      operation_logic: "操作逻辑型",
+      language: "语言学习型",
+      network_assoc: "网络关联型",
+      model_apply: "模型应用型",
+      perception: "感知表达型",
+      practical: "实践技艺型",
+    } as Record<string, string>)[ctx.learningType] || ctx.learningType;
+
+  return `你是一位耐心的 AI 学习导师，正在辅导学习者完成今日课程。
+
+【学习定位】
+- 整体目标：${ctx.planGoal}
+- 当前进度：第 ${ctx.dayNumber} 天
+- 今日主题：${ctx.dayTitle}
+- 今日目标：${ctx.dayGoal || "（见下方学习材料）"}
+- 学习类型：${typeLabel}
+
+【今日学习材料 — 回答必须以此为准】
+${ctx.markdownContent}
+
+【回答规则】
+1. 所有回答必须优先基于【今日学习材料】，引用材料中的概念、例题、步骤进行讲解
+2. 若问题超出材料范围，先说明「今日材料中未涉及」，再简要补充，并建议回到材料中的相关章节
+3. 结合对话历史理解「这个」「刚才那个」「再解释一下」等指代
+4. 采用引导式教学：先定位到材料中的相关部分，再分步解释，必要时举例
+5. 用清晰、完整的中文回答，可以使用 Markdown 格式（公式用 $...$ 或 $$...$$）`;
+}
+
+export async function askAIWithContext(
+  question: string,
+  dayContext: DayQAContext,
+  history: ChatMessage[],
+): Promise<string> {
   try {
+    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      { role: "system", content: buildQASystemPrompt(dayContext) },
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user", content: question },
+    ];
+
     const response = await chatCompletion({
-      messages: [
-        {
-          role: "system",
-          content: `你是一位耐心的AI学习导师。学习者正在学习以下内容：\n\n${context}\n\n请结合学习者的上下文，用简洁清晰的中文回答问题。`,
-        },
-        { role: "user", content: question },
-      ],
+      messages,
       temperature: 0.7,
-      max_tokens: 2000,
+      max_tokens: 4000,
     });
 
     if (!response.ok) {
@@ -245,6 +292,45 @@ export async function askAI(question: string, context: string): Promise<string> 
   } catch {
     return "抱歉，请求出错了，请稍后再试。";
   }
+}
+
+/** @deprecated 请使用 askAIWithContext 或 qa.askAndAnswer */
+export async function askAI(question: string, context: string): Promise<string> {
+  return askAIWithContext(
+    question,
+    {
+      planGoal: "",
+      dayNumber: 0,
+      dayTitle: "",
+      dayGoal: "",
+      learningType: "abstract_logic",
+      markdownContent: context,
+    },
+    [],
+  );
+}
+
+export async function streamQAWithContext(
+  question: string,
+  dayContext: DayQAContext,
+  history: ChatMessage[],
+  signal?: AbortSignal,
+): Promise<Response> {
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: buildQASystemPrompt(dayContext) },
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: question },
+  ];
+
+  return chatCompletion(
+    {
+      messages,
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 4000,
+    },
+    { signal },
+  );
 }
 
 export async function streamContent(
@@ -263,7 +349,7 @@ export async function streamContent(
       ],
       stream: true,
       temperature: 0.7,
-      max_tokens: 4000,
+      max_tokens: 8192,
     },
     { signal },
   );

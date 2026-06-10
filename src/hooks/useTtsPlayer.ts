@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { streamSpeechAudio } from "@/services/ttsService";
+import { playSpeechPipeline } from "@/services/ttsService";
 
 export type TtsStatus = "idle" | "loading" | "playing";
 
@@ -41,10 +41,10 @@ export function useTtsPlayer() {
       setProgress(null);
 
       try {
-        await streamSpeechAudio(
+        await playSpeechPipeline(
           text,
           {
-            onFirstSegment: () => setStatus("playing"),
+            onFirstSentence: () => setStatus("playing"),
             onProgress: (current, total) => setProgress({ current, total }),
           },
           controller.signal,

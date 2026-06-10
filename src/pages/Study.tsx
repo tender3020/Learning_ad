@@ -81,6 +81,11 @@ export default function Study() {
   const contentSpeechText = todayItem && content
     ? `${todayItem.title}。${content}`
     : content;
+  const canAskQA = !!content?.trim() && !isStreaming;
+  const qaContextLabel = todayItem
+    ? `基于：第 ${store.currentDay} 天 · ${todayItem.title}`
+    : "请先完成今日学习内容";
+  const qaInputPlaceholder = canAskQA ? "输入问题..." : "请先生成今日学习内容";
 
   // 学习时长追踪：每60秒增加1分钟计数
   useEffect(() => {
@@ -191,34 +196,65 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
   };
 
   const handleAskQuestion = async () => {
-    if (!question.trim() || isAiTyping || !store.currentPlanId) return;
+    if (!question.trim() || isAiTyping || !store.currentPlanId || !canAskQA) return;
     const userQuestion = question.trim();
-    setQaMessages((prev) => [...prev, { type: "user", text: userQuestion }]);
+    setQaMessages((prev) => [
+      ...prev,
+      { type: "user", text: userQuestion },
+      { type: "ai", text: "" },
+    ]);
     setQuestion("");
     setIsAiTyping(true);
     setError("");
-    try {
-      const context = todayItem ? `当前学习主题：${todayItem.title}，目标：${todayItem.goal}` : "";
-      const answer = await aiService.askAI(userQuestion, context);
-      setQaMessages((prev) => [...prev, { type: "ai", text: answer }]);
-      // 保存问答到数据库（按天隔离）
-      try {
-        const { qaId } = await utils.client.qa.ask.mutate({
-          planId: store.currentPlanId,
-          dayNumber: store.currentDay,
-          question: userQuestion,
-          context,
-        });
-        await utils.client.qa.saveAnswer.mutate({ qaId, answer });
-        utils.qa.getHistory.invalidate({
-          planId: store.currentPlanId,
-          dayNumber: store.currentDay,
-        });
-      } catch { /* silent: 保存失败不影响用户体验 */ }
-    } catch (err: any) {
-      setQaMessages((prev) => [...prev, { type: "ai", text: `抱歉，AI 服务暂时不可用。错误信息：${err.message || "未知错误"}` }]);
-    } finally { setIsAiTyping(false); }
+
+    await aiService.streamQA(
+      store.currentPlanId,
+      store.currentDay,
+      userQuestion,
+      {
+        onToken: (token) => {
+          setQaMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.type === "ai") {
+              next[next.length - 1] = { type: "ai", text: last.text + token };
+            }
+            return next;
+          });
+        },
+        onComplete: () => {
+          setIsAiTyping(false);
+          utils.qa.getHistory.invalidate({
+            planId: store.currentPlanId!,
+            dayNumber: store.currentDay,
+          });
+        },
+        onError: (err) => {
+          setIsAiTyping(false);
+          setQaMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.type === "ai" && !last.text.trim()) {
+              next[next.length - 1] = { type: "ai", text: `抱歉，无法回答。${err}` };
+            } else if (last?.type === "ai") {
+              next[next.length - 1] = {
+                type: "ai",
+                text: `${last.text}\n\n（回答未完成：${err}）`,
+              };
+            } else {
+              next.push({ type: "ai", text: `抱歉，无法回答。${err}` });
+            }
+            return next;
+          });
+        },
+      },
+    );
   };
+
+  const showAiPlaceholder =
+    isAiTyping &&
+    qaMessages[qaMessages.length - 1]?.type === "ai" &&
+    !qaMessages[qaMessages.length - 1]?.text;
 
   // 当切换天或历史数据到达时，同步 qaMessages（按天隔离）
   useEffect(() => {
@@ -442,14 +478,19 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-[#F5F5F7]">AI 学习导师</h3>
-                    <p className="text-[10px] text-[#8A8A8E]">AI 学习导师</p>
+                    <p className="text-[10px] text-[#8A8A8E] truncate max-w-[240px]">{qaContextLabel}</p>
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
                   {qaMessages.length === 0 && (
                     <div className="text-center py-10">
                       <MessageCircle size={28} className="mx-auto mb-2 text-[#8A8A8E]" />
-                      <p className="text-xs text-[#8A8A8E]">有任何问题都可以问我</p>
+                      <p className="text-xs text-[#8A8A8E]">
+                        {canAskQA ? "有任何问题都可以问我" : "请先生成今日学习内容"}
+                      </p>
+                      {canAskQA && (
+                        <p className="text-[10px] text-[#8A8A8E] mt-1">我会结合今日材料为你解答</p>
+                      )}
                     </div>
                   )}
                   {qaMessages.map((msg, i) => (
@@ -472,7 +513,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                       </div>
                     </motion.div>
                   ))}
-                  {isAiTyping && (
+                  {showAiPlaceholder && (
                     <div className="flex justify-start">
                       <div className="liquid-glass px-4 py-3 rounded-2xl rounded-bl-md">
                         <div className="flex items-center gap-1.5">
@@ -489,8 +530,9 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                   <div className="flex items-center gap-2">
                     <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleAskQuestion()}
-                      placeholder="输入问题..." className="flex-1 px-4 py-2.5 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all" />
-                    <button onClick={handleAskQuestion} disabled={!question.trim() || isAiTyping}
+                      placeholder={qaInputPlaceholder} disabled={!canAskQA}
+                      className="flex-1 px-4 py-2.5 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all disabled:opacity-50" />
+                    <button onClick={handleAskQuestion} disabled={!question.trim() || isAiTyping || !canAskQA}
                       className="p-2.5 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl transition-colors">
                       <Send size={16} />
                     </button>
@@ -514,7 +556,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-[#F5F5F7]">AI 学习导师</h3>
-                  <p className="text-[10px] text-[#8A8A8E]">智能问答</p>
+                  <p className="text-[10px] text-[#8A8A8E] truncate max-w-[200px]">{qaContextLabel}</p>
                 </div>
               </div>
               <button onClick={() => setShowQA(false)} className="w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
@@ -525,8 +567,12 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
               {qaMessages.length === 0 && (
                 <div className="text-center py-10">
                   <MessageCircle size={32} className="mx-auto mb-3 text-[#8A8A8E]" />
-                  <p className="text-sm text-[#8A8A8E] mb-1">有任何问题都可以问我</p>
-                  <p className="text-xs text-[#8A8A8E]">我会结合当前学习内容为你解答</p>
+                  <p className="text-sm text-[#8A8A8E] mb-1">
+                    {canAskQA ? "有任何问题都可以问我" : "请先生成今日学习内容"}
+                  </p>
+                  {canAskQA && (
+                    <p className="text-xs text-[#8A8A8E]">我会结合今日材料为你解答</p>
+                  )}
                 </div>
               )}
               {qaMessages.map((msg, i) => (
@@ -549,7 +595,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                   </div>
                 </motion.div>
               ))}
-              {isAiTyping && (
+              {showAiPlaceholder && (
                 <div className="flex justify-start">
                   <div className="liquid-glass px-4 py-3 rounded-2xl rounded-bl-md">
                     <div className="flex items-center gap-1.5">
@@ -566,8 +612,9 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
               <div className="flex items-center gap-2">
                 <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAskQuestion()}
-                  placeholder="输入问题..." className="flex-1 px-4 py-3 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all" />
-                <button onClick={handleAskQuestion} disabled={!question.trim() || isAiTyping}
+                  placeholder={qaInputPlaceholder} disabled={!canAskQA}
+                  className="flex-1 px-4 py-3 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all disabled:opacity-50" />
+                <button onClick={handleAskQuestion} disabled={!question.trim() || isAiTyping || !canAskQA}
                   className="p-3 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl transition-colors">
                   <Send size={18} />
                 </button>

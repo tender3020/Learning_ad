@@ -7,8 +7,15 @@ import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 import { getUserFromRequest } from "./lib/request-auth";
-import { streamContent } from "./services/aiService";
-import { synthesizeSpeech, streamSpeechSegments } from "./lib/volcengine-tts";
+import { streamContent, streamQAWithContext } from "./services/aiService";
+import {
+  prepareQARequest,
+  saveQARecord,
+  pipeQAStreamWithSave,
+  QAContextError,
+} from "./services/qaService";
+import { getDb } from "./queries/connection";
+import { synthesizeSentence } from "./lib/volcengine-tts";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -86,10 +93,90 @@ app.post("/api/ai/stream", async (c) => {
   }
 });
 
-const ttsInputSchema = z.object({
-  text: z.string().min(1).max(8000),
+const qaStreamInputSchema = z.object({
+  planId: z.number(),
+  dayNumber: z.number().min(1),
+  question: z.string().min(1).max(2000),
 });
 
+app.post("/api/ai/qa/stream", async (c) => {
+  const user = await getUserFromRequest(c.req.raw);
+  if (!user) {
+    return c.json({ error: "请先登录" }, 401);
+  }
+
+  let body: z.infer<typeof qaStreamInputSchema>;
+  try {
+    body = qaStreamInputSchema.parse(await c.req.json());
+  } catch {
+    return c.json({ error: "请求参数无效" }, 400);
+  }
+
+  const db = getDb();
+
+  try {
+    const prepared = await prepareQARequest(
+      db,
+      user.id,
+      body.planId,
+      body.dayNumber,
+    );
+
+    const upstream = await streamQAWithContext(
+      body.question,
+      prepared.dayContext,
+      prepared.history,
+      c.req.raw.signal,
+    );
+
+    if (!upstream.ok) {
+      const errorData = await upstream.json().catch(() => ({}));
+      return c.json(
+        {
+          error:
+            (errorData as { error?: { message?: string } }).error?.message ||
+            "AI 请求失败",
+        },
+        502,
+      );
+    }
+
+    const outputStream = await pipeQAStreamWithSave(
+      upstream,
+      (fullAnswer) =>
+        saveQARecord(
+          db,
+          user.id,
+          body.planId,
+          body.dayNumber,
+          body.question,
+          fullAnswer,
+          prepared.contextSnapshot,
+        ),
+      c.req.raw.signal,
+    );
+
+    return new Response(outputStream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  } catch (error) {
+    if (error instanceof QAContextError) {
+      return c.json({ error: error.message }, error.status as 404 | 412);
+    }
+    const message = error instanceof Error ? error.message : "未知错误";
+    return c.json({ error: message }, 500);
+  }
+});
+
+const ttsInputSchema = z.object({
+  text: z.string().min(1).max(500),
+});
+
+/** 单句 TTS：前端流水线按句请求，停止后不再消耗后续字符 */
 app.post("/api/tts/speak", async (c) => {
   const user = await getUserFromRequest(c.req.raw);
   if (!user) {
@@ -100,11 +187,11 @@ app.post("/api/tts/speak", async (c) => {
   try {
     body = ttsInputSchema.parse(await c.req.json());
   } catch {
-    return c.json({ error: "请求参数无效" }, 400);
+    return c.json({ error: "单句文本无效或超过 500 字" }, 400);
   }
 
   try {
-    const audio = await synthesizeSpeech(body.text);
+    const audio = await synthesizeSentence(body.text);
     return new Response(audio, {
       headers: {
         "Content-Type": "audio/mpeg",
@@ -115,61 +202,6 @@ app.post("/api/tts/speak", async (c) => {
     const message = error instanceof Error ? error.message : "语音合成失败";
     return c.json({ error: message }, 500);
   }
-});
-
-app.post("/api/tts/stream", async (c) => {
-  const user = await getUserFromRequest(c.req.raw);
-  if (!user) {
-    return c.json({ error: "请先登录" }, 401);
-  }
-
-  let body: z.infer<typeof ttsInputSchema>;
-  try {
-    body = ttsInputSchema.parse(await c.req.json());
-  } catch {
-    return c.json({ error: "请求参数无效" }, 400);
-  }
-
-  const encoder = new TextEncoder();
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const segment of streamSpeechSegments(body.text)) {
-          if (c.req.raw.signal.aborted) break;
-
-          const payload = JSON.stringify({
-            index: segment.index,
-            total: segment.total,
-            audio: segment.audio.toString("base64"),
-          });
-          controller.enqueue(
-            encoder.encode(`event: segment\ndata: ${payload}\n\n`),
-          );
-        }
-        if (!c.req.raw.signal.aborted) {
-          controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "语音合成失败";
-        controller.enqueue(
-          encoder.encode(
-            `event: error\ndata: ${JSON.stringify({ error: message })}\n\n`,
-          ),
-        );
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
 });
 
 // 生产环境静态文件服务

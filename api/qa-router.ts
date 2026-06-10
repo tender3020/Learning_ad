@@ -1,11 +1,78 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { qaHistory } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { askAIWithContext } from "./services/aiService";
+import {
+  prepareQARequest,
+  saveQARecord,
+  QAContextError,
+} from "./services/qaService";
+
+function mapQAContextError(error: unknown): never {
+  if (error instanceof QAContextError) {
+    const code =
+      error.status === 404
+        ? "NOT_FOUND"
+        : error.status === 412
+          ? "PRECONDITION_FAILED"
+          : "BAD_REQUEST";
+    throw new TRPCError({ code, message: error.message });
+  }
+  throw error;
+}
 
 export const qaRouter = createRouter({
-  // 提交问题并保存（AI 回答在流式输出中处理）
+  // 一站式问答（非流式，保留兼容）
+  askAndAnswer: authedQuery
+    .input(
+      z.object({
+        planId: z.number(),
+        dayNumber: z.number().min(1),
+        question: z.string().min(1, "问题不能为空").max(2000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      const userId = ctx.user.id;
+
+      try {
+        const prepared = await prepareQARequest(
+          db,
+          userId,
+          input.planId,
+          input.dayNumber,
+        );
+
+        const answer = await askAIWithContext(
+          input.question,
+          prepared.dayContext,
+          prepared.history,
+        );
+
+        const qaId = await saveQARecord(
+          db,
+          userId,
+          input.planId,
+          input.dayNumber,
+          input.question,
+          answer,
+          prepared.contextSnapshot,
+        );
+
+        return {
+          qaId,
+          question: input.question,
+          answer,
+        };
+      } catch (error) {
+        mapQAContextError(error);
+      }
+    }),
+
+  // 提交问题并保存（AI 回答在流式输出中处理）— 保留兼容
   ask: authedQuery
     .input(
       z.object({
@@ -13,7 +80,7 @@ export const qaRouter = createRouter({
         dayNumber: z.number().optional(),
         question: z.string().min(1, "问题不能为空"),
         context: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
@@ -41,7 +108,7 @@ export const qaRouter = createRouter({
       z.object({
         qaId: z.number(),
         answer: z.string(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
@@ -51,10 +118,7 @@ export const qaRouter = createRouter({
         .update(qaHistory)
         .set({ answer: input.answer })
         .where(
-          and(
-            eq(qaHistory.id, input.qaId),
-            eq(qaHistory.userId, userId)
-          )
+          and(eq(qaHistory.id, input.qaId), eq(qaHistory.userId, userId)),
         );
 
       return { success: true };
@@ -67,7 +131,7 @@ export const qaRouter = createRouter({
         planId: z.number(),
         dayNumber: z.number().optional(),
         limit: z.number().min(1).max(100).default(50),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       const db = getDb();
@@ -98,7 +162,7 @@ export const qaRouter = createRouter({
       z.object({
         planId: z.number(),
         limit: z.number().min(1).max(20).default(5),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       const db = getDb();
@@ -113,8 +177,8 @@ export const qaRouter = createRouter({
         .where(
           and(
             eq(qaHistory.planId, input.planId),
-            eq(qaHistory.userId, userId)
-          )
+            eq(qaHistory.userId, userId),
+          ),
         )
         .orderBy(desc(qaHistory.createdAt))
         .limit(input.limit);

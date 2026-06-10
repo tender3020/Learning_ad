@@ -1,23 +1,14 @@
 import { randomUUID } from "crypto";
 import { env } from "./env";
-import {
-  markdownToSpeechText,
-  splitTextForStreaming,
-  truncateForTts,
-} from "./text-for-tts";
+import { markdownToSpeechText } from "@shared/textForTts";
 
 const TTS_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
+const MAX_SENTENCE_CHARS = 500;
 
 type TtsChunkResponse = {
   code: number;
   message?: string;
   data?: string | null;
-};
-
-export type TtsSegment = {
-  index: number;
-  total: number;
-  audio: Buffer;
 };
 
 function buildHeaders(): Record<string, string> {
@@ -62,23 +53,29 @@ function parseJsonLines(buffer: string): { remaining: string; objects: TtsChunkR
 }
 
 function handleChunk(obj: TtsChunkResponse, audioParts: Buffer[]): boolean {
-  if (obj.code === 20000000) {
-    return true;
-  }
-
+  if (obj.code === 20000000) return true;
   if (obj.code === 0 && obj.data) {
     audioParts.push(Buffer.from(obj.data, "base64"));
     return false;
   }
-
   if (obj.code !== 0) {
     throw new Error(obj.message || `TTS 合成失败 (code: ${obj.code})`);
   }
-
   return false;
 }
 
-async function synthesizeSegmentText(text: string): Promise<Buffer> {
+/** 单句合成（每次 API 调用只处理一句，按需计费） */
+export async function synthesizeSentence(sentence: string): Promise<Buffer> {
+  assertTtsConfigured();
+
+  const text = markdownToSpeechText(sentence) || sentence.trim();
+  if (!text) {
+    throw new Error("没有可朗读的文本内容");
+  }
+  if (text.length > MAX_SENTENCE_CHARS) {
+    throw new Error(`单句过长（${text.length} 字），请拆分后合成`);
+  }
+
   const payload = {
     user: { uid: "yizhi-user" },
     req_params: {
@@ -134,7 +131,7 @@ async function synthesizeSegmentText(text: string): Promise<Buffer> {
     try {
       handleChunk(JSON.parse(buffer.trim()) as TtsChunkResponse, audioParts);
     } catch {
-      // 忽略尾部解析失败
+      // 忽略
     }
   }
 
@@ -145,30 +142,7 @@ async function synthesizeSegmentText(text: string): Promise<Buffer> {
   return Buffer.concat(audioParts);
 }
 
-export function prepareSpeechText(rawText: string): string {
-  const text = truncateForTts(markdownToSpeechText(rawText));
-  if (!text) {
-    throw new Error("没有可朗读的文本内容");
-  }
-  return text;
-}
-
-/** 整段合成（短文本） */
+/** @deprecated 使用 synthesizeSentence，仅保留兼容 */
 export async function synthesizeSpeech(rawText: string): Promise<Buffer> {
-  assertTtsConfigured();
-  const text = prepareSpeechText(rawText);
-  return synthesizeSegmentText(text);
-}
-
-/** 分段流式合成：每完成一段立即 yield，前端可边收边播 */
-export async function* streamSpeechSegments(rawText: string): AsyncGenerator<TtsSegment> {
-  assertTtsConfigured();
-  const text = prepareSpeechText(rawText);
-  const segments = splitTextForStreaming(text);
-  const total = segments.length;
-
-  for (let index = 0; index < total; index++) {
-    const audio = await synthesizeSegmentText(segments[index]);
-    yield { index, total, audio };
-  }
+  return synthesizeSentence(rawText);
 }

@@ -56,11 +56,16 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+export interface QAStreamCallbacks extends StreamCallbacks {
+  onDone?: (qaId: number) => void;
+}
+
 /**
  * AI 服务类 - 通过后端 API 调用 DeepSeek（密钥保存在服务端 .env）
  */
 export class AIService {
   private abortController: AbortController | null = null;
+  private qaAbortController: AbortController | null = null;
 
   async detectLearningType(goal: string): Promise<{ type: LearningType; reason: string }> {
     return trpcClient.ai.detectLearningType.mutate({ goal });
@@ -92,6 +97,87 @@ export class AIService {
 
   async askAI(question: string, context: string): Promise<string> {
     return trpcClient.ai.ask.mutate({ question, context });
+  }
+
+  async streamQA(
+    planId: number,
+    dayNumber: number,
+    question: string,
+    callbacks: QAStreamCallbacks,
+  ): Promise<void> {
+    this.qaAbortController = new AbortController();
+
+    try {
+      const response = await fetch("/api/ai/qa/stream", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        credentials: "include",
+        body: JSON.stringify({ planId, dayNumber, question }),
+        signal: this.qaAbortController.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          (errorData as { error?: string }).error || `API 请求失败: ${response.status}`,
+        );
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("无法读取响应流");
+      }
+
+      const decoder = new TextDecoder();
+      let fullText = "";
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(data) as {
+              type?: string;
+              qaId?: number;
+              choices?: Array<{ delta?: { content?: string } }>;
+            };
+
+            if (parsed.type === "done") {
+              callbacks.onDone?.(parsed.qaId || 0);
+              continue;
+            }
+
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              fullText += content;
+              callbacks.onToken(content);
+            }
+          } catch {
+            // 忽略解析错误的行
+          }
+        }
+      }
+
+      callbacks.onComplete(fullText);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        callbacks.onError("回答已取消");
+      } else {
+        callbacks.onError(error instanceof Error ? error.message : "未知错误");
+      }
+    }
   }
 
   async streamContent(
@@ -167,6 +253,10 @@ export class AIService {
 
   abort() {
     this.abortController?.abort();
+  }
+
+  abortQA() {
+    this.qaAbortController?.abort();
   }
 }
 
