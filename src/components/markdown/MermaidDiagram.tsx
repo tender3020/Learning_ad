@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import mermaid from "mermaid";
 
 function isLightTheme() {
@@ -54,6 +54,7 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const reactId = useId().replace(/:/g, "");
   const renderCountRef = useRef(0);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const trimmed = chart.trim();
@@ -68,9 +69,15 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
         const { svg } = await mermaid.render(renderId, trimmed);
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
+          setError(null);
         }
-      } catch {
-        // Incomplete syntax during streaming — skip until content stabilizes
+      } catch (err) {
+        // 记录错误供调试，但在流式传输时忽略不完整的语法
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error(`[Mermaid Render Error] ${renderId}:`, errorMessage);
+        if (!cancelled) {
+          setError(errorMessage);
+        }
       }
     }, 200);
 
@@ -94,9 +101,14 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
         .then(({ svg }) => {
           if (containerRef.current) {
             containerRef.current.innerHTML = svg;
+            setError(null);
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          console.error(`[Mermaid Theme Toggle Error] ${renderId}:`, errorMessage);
+          setError(errorMessage);
+        });
     });
 
     observer.observe(document.documentElement, {
@@ -108,6 +120,32 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
   }, [chart, reactId]);
 
   if (!chart.trim()) return null;
+
+  // 显示错误消息便于调试
+  if (error) {
+    return (
+      <div
+        className="mermaid-diagram-error"
+        style={{
+          padding: "12px",
+          marginTop: "1rem",
+          marginBottom: "1rem",
+          background: "rgba(239, 68, 68, 0.1)",
+          border: "1px solid rgba(239, 68, 68, 0.3)",
+          borderRadius: "8px",
+          fontSize: "0.85rem",
+          color: "#dc2626",
+          fontFamily: "monospace",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        }}
+      >
+        <strong>Mermaid 图表错误:</strong>
+        <br />
+        {error}
+      </div>
+    );
+  }
 
   return <div className="mermaid-diagram" ref={containerRef} />;
 }
