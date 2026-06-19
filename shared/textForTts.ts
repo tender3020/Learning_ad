@@ -53,7 +53,7 @@ function splitLongChunk(chunk: string, maxChars: number): string[] {
  */
 export function splitIntoSentences(
   rawMarkdown: string,
-  maxCharsPerSentence = 200,
+  maxCharsPerSentence = 450,
 ): string[] {
   const text = markdownToSpeechText(rawMarkdown);
   if (!text) return [];
@@ -73,7 +73,7 @@ export function splitIntoSentences(
 
 export function prepareSpeechSentences(
   rawMarkdown: string,
-  maxCharsPerSentence = 200,
+  maxCharsPerSentence = 450,
 ): string[] {
   return splitIntoSentences(rawMarkdown, maxCharsPerSentence);
 }
