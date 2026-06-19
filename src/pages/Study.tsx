@@ -228,6 +228,10 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
             planId: store.currentPlanId!,
             dayNumber: store.currentDay,
           });
+          if (store.currentPlanId) {
+            utils.mastery.getScores.invalidate({ planId: store.currentPlanId });
+            utils.mastery.getStats.invalidate({ planId: store.currentPlanId });
+          }
         },
         onError: (err) => {
           setIsAiTyping(false);

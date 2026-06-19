@@ -16,6 +16,7 @@ import {
 } from "./services/qaService";
 import { getDb } from "./queries/connection";
 import { synthesizeSentence } from "./lib/volcengine-tts";
+import { recordQAMastery } from "./services/masteryService";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -143,8 +144,8 @@ app.post("/api/ai/qa/stream", async (c) => {
 
     const outputStream = await pipeQAStreamWithSave(
       upstream,
-      (fullAnswer) =>
-        saveQARecord(
+      async (fullAnswer) => {
+        const qaId = await saveQARecord(
           db,
           user.id,
           body.planId,
@@ -152,7 +153,16 @@ app.post("/api/ai/qa/stream", async (c) => {
           body.question,
           fullAnswer,
           prepared.contextSnapshot,
-        ),
+        );
+        await recordQAMastery(
+          db,
+          user.id,
+          body.planId,
+          prepared.dayContext.dayTitle,
+          prepared.targetMinutes,
+        );
+        return qaId;
+      },
       c.req.raw.signal,
     );
 

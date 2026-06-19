@@ -10,6 +10,7 @@ import {
   saveQARecord,
   QAContextError,
 } from "./services/qaService";
+import { recordQAMastery } from "./services/masteryService";
 
 function mapQAContextError(error: unknown): never {
   if (error instanceof QAContextError) {
@@ -60,6 +61,14 @@ export const qaRouter = createRouter({
           input.question,
           answer,
           prepared.contextSnapshot,
+        );
+
+        await recordQAMastery(
+          db,
+          userId,
+          input.planId,
+          prepared.dayContext.dayTitle,
+          prepared.targetMinutes,
         );
 
         return {

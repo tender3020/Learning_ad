@@ -6,6 +6,7 @@ import "katex/dist/katex.min.css";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { splitContentWithQuizzes, QuizCard } from "@/components/quiz/QuizRenderer";
+import MermaidDiagram from "./MermaidDiagram";
 
 interface MarkdownRendererProps {
   content: string;
@@ -87,10 +88,17 @@ export default function MarkdownRenderer({
 
 /** 共享的 Markdown 组件配置 */
 const markdownComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
+  pre({ children }) {
+    return <>{children}</>;
+  },
   code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
     const match = /language-(\w+)/.exec(className || "");
     const language = match ? match[1] : "";
     const codeString = String(children).replace(/\n$/, "");
+
+    if (language === "mermaid") {
+      return <MermaidDiagram chart={codeString} />;
+    }
 
     if (language) {
       return (

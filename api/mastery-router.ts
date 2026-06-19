@@ -3,6 +3,11 @@ import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { masteryScores, quizResults } from "@db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import {
+  computeQuizScore,
+  computeMasteryScore,
+  recordQAMastery,
+} from "./services/masteryService";
 
 /**
  * ============================================================================
@@ -35,82 +40,6 @@ import { eq, and, desc, sql } from "drizzle-orm";
  *   - 从 quizResults 和 studySessions 综合判断
  * ============================================================================
  */
-
-/** 计算Quiz加权分数 (0-100) */
-async function computeQuizScore(
-  db: ReturnType<typeof getDb>,
-  userId: number,
-  planId: number,
-  knowledgeName: string
-): Promise<number> {
-  const results = await db
-    .select()
-    .from(quizResults)
-    .where(
-      and(
-        eq(quizResults.userId, userId),
-        eq(quizResults.planId, planId),
-        eq(quizResults.knowledgeName, knowledgeName)
-      )
-    )
-    .orderBy(quizResults.createdAt);
-
-  if (results.length === 0) return 0;
-
-  // 权重衰减：第1次1.0，第2次0.7，第3次0.5，第4次及以后0.3
-  const getWeight = (attempt: number): number => {
-    if (attempt === 1) return 1.0;
-    if (attempt === 2) return 0.7;
-    if (attempt === 3) return 0.5;
-    return 0.3;
-  };
-
-  let weightedCorrectSum = 0;
-  let weightedTotalSum = 0;
-
-  results.forEach((r) => {
-    const weight = getWeight(r.attemptNumber);
-    weightedTotalSum += weight;
-    if (r.isCorrect === "true") {
-      weightedCorrectSum += weight;
-    }
-  });
-
-  if (weightedTotalSum === 0) return 0;
-  return Math.round((weightedCorrectSum / weightedTotalSum) * 100);
-}
-
-/** 计算完整的掌握度分数 */
-function computeMasteryScore(params: {
-  studyMinutes: number;
-  targetMinutes: number;
-  questionsAsked: number;
-  correctAnswers: number;
-  quizScore: number;
-  consecutiveDays: number;
-}): number {
-  const { studyMinutes, targetMinutes, questionsAsked, correctAnswers, quizScore, consecutiveDays } = params;
-
-  // StudyTimeScore (0-100)
-  const studyTimeScore = Math.min(100, Math.round((studyMinutes / Math.max(targetMinutes, 1)) * 100));
-
-  // QAScore (0-100): 每次提问+20，每次正确额外+10
-  const qaScore = Math.min(100, questionsAsked * 20 + correctAnswers * 10);
-
-  // QuizScore 已经是 0-100
-
-  // FrequencyScore (0-100): 连续天数 * 14.3
-  const frequencyScore = Math.min(100, Math.round(consecutiveDays * 14.3));
-
-  // 加权综合
-  const rawScore =
-    studyTimeScore * 0.25 +
-    qaScore * 0.20 +
-    quizScore * 0.40 +
-    frequencyScore * 0.15;
-
-  return Math.min(100, Math.round(rawScore));
-}
 
 export const masteryRouter = createRouter({
   // ---- 更新学习时长并重新计算掌握度 ----
@@ -207,64 +136,59 @@ export const masteryRouter = createRouter({
       const db = getDb();
       const userId = ctx.user.id;
 
-      const existing = await db
-        .select()
-        .from(masteryScores)
-        .where(
-          and(
-            eq(masteryScores.userId, userId),
-            eq(masteryScores.planId, input.planId),
-            eq(masteryScores.knowledgeName, input.knowledgeName)
-          )
-        )
-        .limit(1);
+      const result = await recordQAMastery(
+        db,
+        userId,
+        input.planId,
+        input.knowledgeName,
+        input.targetMinutes,
+      );
 
-      if (existing.length === 0) {
-        // 创建新记录，只有问答数据
-        const result = await db.insert(masteryScores).values({
-          userId,
-          planId: input.planId,
-          knowledgeName: input.knowledgeName,
-          masteryScore: computeMasteryScore({
-            studyMinutes: 0,
+      if (input.isCorrect) {
+        const existing = await db
+          .select()
+          .from(masteryScores)
+          .where(
+            and(
+              eq(masteryScores.userId, userId),
+              eq(masteryScores.planId, input.planId),
+              eq(masteryScores.knowledgeName, input.knowledgeName),
+            ),
+          )
+          .limit(1);
+
+        if (existing[0]) {
+          const record = existing[0];
+          const newCorrectAnswers = record.correctAnswers + 1;
+          const quizScore = await computeQuizScore(
+            db,
+            userId,
+            input.planId,
+            input.knowledgeName,
+          );
+          const masteryScore = computeMasteryScore({
+            studyMinutes: record.studyMinutes,
             targetMinutes: input.targetMinutes,
-            questionsAsked: 1,
-            correctAnswers: input.isCorrect ? 1 : 0,
-            quizScore: 0,
+            questionsAsked: record.questionsAsked,
+            correctAnswers: newCorrectAnswers,
+            quizScore,
             consecutiveDays: 1,
-          }),
-          questionsAsked: 1,
-          correctAnswers: input.isCorrect ? 1 : 0,
-        });
-        const newRecord = await db.select().from(masteryScores).where(eq(masteryScores.id, Number(result[0].insertId))).limit(1);
-        return { success: true, masteryScore: newRecord[0].masteryScore };
+          });
+
+          await db
+            .update(masteryScores)
+            .set({
+              correctAnswers: newCorrectAnswers,
+              masteryScore,
+              updatedAt: new Date(),
+            })
+            .where(eq(masteryScores.id, record.id));
+
+          return { success: true, masteryScore };
+        }
       }
 
-      const record = existing[0];
-      const newQuestionsAsked = record.questionsAsked + 1;
-      const newCorrectAnswers = record.correctAnswers + (input.isCorrect ? 1 : 0);
-      const quizScore = await computeQuizScore(db, userId, input.planId, input.knowledgeName);
-
-      const newScore = computeMasteryScore({
-        studyMinutes: record.studyMinutes,
-        targetMinutes: input.targetMinutes,
-        questionsAsked: newQuestionsAsked,
-        correctAnswers: newCorrectAnswers,
-        quizScore,
-        consecutiveDays: 1,
-      });
-
-      await db
-        .update(masteryScores)
-        .set({
-          questionsAsked: newQuestionsAsked,
-          correctAnswers: newCorrectAnswers,
-          masteryScore: newScore,
-          updatedAt: new Date(),
-        })
-        .where(eq(masteryScores.id, record.id));
-
-      return { success: true, masteryScore: newScore };
+      return { success: true, masteryScore: result.masteryScore };
     }),
 
   // ---- 提交答题结果并重新计算掌握度 ----

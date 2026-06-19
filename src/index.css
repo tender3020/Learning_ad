@@ -405,6 +405,18 @@
 }
 
 /* 浅色主题公式颜色 */
-.theme-light .markdown-body .katex {
-  color: #1C1C1E;
+.markdown-body .mermaid-diagram {
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--pre-bg);
+  border: 1px solid var(--pre-border);
+  overflow-x: auto;
+}
+
+.markdown-body .mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
 }

@@ -23,6 +23,7 @@ export interface PreparedQARequest {
   dayContext: DayQAContext;
   history: ChatMessage[];
   contextSnapshot: string;
+  targetMinutes: number;
 }
 
 type Db = ReturnType<typeof getDb>;
@@ -51,6 +52,7 @@ export async function prepareQARequest(
       .select({
         title: learningOutline.title,
         goal: learningOutline.goal,
+        estimatedMinutes: learningOutline.estimatedMinutes,
       })
       .from(learningOutline)
       .where(
@@ -119,6 +121,7 @@ export async function prepareQARequest(
     },
     history,
     contextSnapshot: `第${dayNumber}天 · ${dayTitle} | ${plan.goal}`,
+    targetMinutes: outline?.estimatedMinutes ?? 30,
   };
 }
 
