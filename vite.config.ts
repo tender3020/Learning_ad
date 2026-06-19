@@ -12,6 +12,10 @@ export default defineConfig({
     inspectAttr(), react()],
   server: {
     port: 3000,
+    allowedHosts: [
+      'www.longxuexi.xyz',
+      'longxuexi.xyz'  // 建议两个都加上
+    ],
   },
   resolve: {
     alias: {
