@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { HttpBindings } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
+import path from "path";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { z } from "zod";
 import { appRouter } from "./router";
@@ -20,7 +22,17 @@ import { recordQAMastery } from "./services/masteryService";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
+const dataRoot = path.resolve(import.meta.dirname, "../data");
+
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+
+// 学习内容配图静态资源
+app.use(
+  "/uploads/*",
+  serveStatic({
+    root: dataRoot,
+  }),
+);
 
 // tRPC 路由
 app.use("/api/trpc/*", async (c) => {

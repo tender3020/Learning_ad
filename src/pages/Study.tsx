@@ -65,10 +65,17 @@ export default function Study() {
 
   const saveContent = trpc.content.saveContent.useMutation({
     onSuccess: () => {
-      utils.content.getContent.invalidate({
-        planId: store.currentPlanId || 0,
-        dayNumber: store.currentDay,
-      });
+      const planId = store.currentPlanId || 0;
+      const dayNumber = store.currentDay;
+      utils.content.getContent.invalidate({ planId, dayNumber });
+
+      // 配图在后台生成，定时刷新内容直至配图写入或超时
+      let polls = 0;
+      const pollTimer = setInterval(() => {
+        polls += 1;
+        utils.content.getContent.invalidate({ planId, dayNumber });
+        if (polls >= 12) clearInterval(pollTimer);
+      }, 15000);
     },
   });
 

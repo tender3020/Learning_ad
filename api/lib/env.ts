@@ -24,4 +24,9 @@ export const env = {
     process.env.VOLCENGINE_TTS_SPEAKER ?? "zh_female_shuangkuaisisi_moon_bigtts",
   volcengineTtsFormat: process.env.VOLCENGINE_TTS_FORMAT ?? "mp3",
   volcengineTtsSampleRate: parseInt(process.env.VOLCENGINE_TTS_SAMPLE_RATE ?? "24000", 10),
+  // 阿里云百炼 · 万相图像生成
+  dashscopeApiKey: process.env.DASHSCOPE_API_KEY ?? "",
+  dashscopeApiBase:
+    process.env.DASHSCOPE_API_BASE ?? "https://dashscope.aliyuncs.com/api/v1",
+  dashscopeImageModel: process.env.DASHSCOPE_IMAGE_MODEL ?? "wan2.7-image",
 };

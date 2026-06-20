@@ -36,6 +36,8 @@ db/migrations/*.sql
 # Build outputs
 dist/
 build/
+# Generated learning illustrations (persist on server, do not commit)
+data/uploads/content-images/
 # Test coverage
 coverage/
 .nyc_output/

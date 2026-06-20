@@ -174,4 +174,12 @@ const markdownComponents: React.ComponentProps<typeof ReactMarkdown>["components
       {children}
     </td>
   ),
+  img: ({ src, alt }) => (
+    <img
+      src={src}
+      alt={alt ?? ""}
+      className="content-illustration"
+      loading="lazy"
+    />
+  ),
 };

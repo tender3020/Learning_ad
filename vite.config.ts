@@ -8,7 +8,11 @@ import { inspectAttr } from 'kimi-plugin-inspect-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    devServer({ entry: "api/boot.ts", exclude: [/^\/(?!api\/).*$/] }),
+    devServer({
+      entry: "api/boot.ts",
+      // /api/* 与 /uploads/* 走 Hono（配图静态文件在 data/uploads）
+      exclude: [/^\/(?!api\/|uploads\/).*$/],
+    }),
     inspectAttr(), react()],
   server: {
     port: 3000,
