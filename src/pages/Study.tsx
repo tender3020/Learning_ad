@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,7 +25,6 @@ import {
   GraduationCap,
   X,
   Menu,
-  Image as ImageIcon,
 } from "lucide-react";
 
 export default function Study() {
@@ -42,6 +41,9 @@ export default function Study() {
   const [error, setError] = useState("");
   const qaEndRef = useRef<HTMLDivElement>(null);
   const contentScrollRef = useRef<HTMLDivElement>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const prevContentLenRef = useRef(0);
+  const scrollRafRef = useRef<number | null>(null);
   const studyMinutesRef = useRef(0); // 学习时长追踪（分钟）
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const readingSessionStartRef = useRef<number | null>(null);
@@ -55,13 +57,15 @@ export default function Study() {
     toggleFocusMode,
   } = useReadingPrefs();
 
-  const [readProgress, setReadProgress] = useState(0);
   const [showReadingToc, setShowReadingToc] = useState(false);
   const [activeTocId, setActiveTocId] = useState<string | undefined>();
   const [showBreakReminder, setShowBreakReminder] = useState(false);
   const [breakDismissed, setBreakDismissed] = useState(false);
 
-  const tocItems = content ? getReadingTocItems(content) : [];
+  const tocItems = useMemo(
+    () => (content ? getReadingTocItems(content) : []),
+    [content],
+  );
 
   const { user } = useAuth();
   const { data: plans, isLoading: plansLoading } = trpc.learning.getPlans.useQuery();
@@ -86,40 +90,6 @@ export default function Study() {
     { enabled: !!store.currentPlanId }
   );
   const utils = trpc.useUtils();
-
-  const [isRegeneratingImages, setIsRegeneratingImages] = useState(false);
-
-  const regenerateIllustrations = trpc.content.generateIllustrations.useMutation({
-    onSuccess: (result) => {
-      setIsRegeneratingImages(false);
-      const planId = store.currentPlanId || 0;
-      const dayNumber = store.currentDay;
-      utils.content.getContent.invalidate({ planId, dayNumber });
-      if (result.imageCount > 0) {
-        let polls = 0;
-        const pollTimer = setInterval(() => {
-          polls += 1;
-          utils.content.getContent.invalidate({ planId, dayNumber });
-          if (polls >= 12) clearInterval(pollTimer);
-        }, 15000);
-      }
-    },
-    onError: (err) => {
-      setIsRegeneratingImages(false);
-      setError(err.message);
-    },
-  });
-
-  const handleRegenerateIllustrations = () => {
-    if (!store.currentPlanId || !content.trim()) return;
-    setIsRegeneratingImages(true);
-    setError("");
-    regenerateIllustrations.mutate({
-      planId: store.currentPlanId,
-      dayNumber: store.currentDay,
-      force: true,
-    });
-  };
 
   const saveContent = trpc.content.saveContent.useMutation({
     onSuccess: () => {
@@ -208,9 +178,24 @@ export default function Study() {
 
   useEffect(() => {
     if (existingContent?.markdownContent) {
-      setContent(existingContent.markdownContent);
+      const el = contentScrollRef.current;
+      const prevScroll = el?.scrollTop ?? 0;
+      const prevLen = prevContentLenRef.current;
+      const newMarkdown = existingContent.markdownContent;
+
+      setContent(newMarkdown);
+
+      if (el && prevLen > 0 && newMarkdown.length !== prevLen) {
+        requestAnimationFrame(() => {
+          if (contentScrollRef.current) {
+            contentScrollRef.current.scrollTop = prevScroll;
+          }
+        });
+      }
+      prevContentLenRef.current = newMarkdown.length;
     } else {
       setContent("");
+      prevContentLenRef.current = 0;
     }
   }, [existingContent, store.currentDay]);
 
@@ -346,22 +331,31 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
   useEffect(() => { qaEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [qaMessages, isAiTyping]);
 
   const handleContentScroll = useCallback(() => {
-    const el = contentScrollRef.current;
-    if (!el) return;
-    const max = el.scrollHeight - el.clientHeight;
-    setReadProgress(max > 0 ? Math.min(100, (el.scrollTop / max) * 100) : 0);
+    if (scrollRafRef.current !== null) return;
 
-    if (tocItems.length > 0) {
-      const scrollTop = el.scrollTop + 120;
-      let current: string | undefined;
-      for (const item of tocItems) {
-        const section = document.getElementById(item.id);
-        if (section && section.offsetTop <= scrollTop) {
-          current = item.id;
-        }
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const el = contentScrollRef.current;
+      if (!el) return;
+
+      const max = el.scrollHeight - el.clientHeight;
+      const pct = max > 0 ? Math.min(100, (el.scrollTop / max) * 100) : 0;
+      if (progressBarRef.current) {
+        progressBarRef.current.style.width = `${pct}%`;
       }
-      setActiveTocId(current);
-    }
+
+      if (tocItems.length > 0) {
+        const scrollTop = el.scrollTop + 120;
+        let current: string | undefined;
+        for (const item of tocItems) {
+          const section = document.getElementById(item.id);
+          if (section && section.offsetTop <= scrollTop) {
+            current = item.id;
+          }
+        }
+        setActiveTocId((prev) => (prev === current ? prev : current));
+      }
+    });
   }, [tocItems]);
 
   useEffect(() => {
@@ -537,31 +531,15 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
               </span>
             )}
             {content && !isStreaming && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleRegenerateIllustrations}
-                  disabled={isRegeneratingImages}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium liquid-glass text-[#8A8A8E] hover:text-[#F5F5F7] disabled:opacity-50 transition-all"
-                  title="重新生成配图"
-                >
-                  {isRegeneratingImages ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <ImageIcon size={14} />
-                  )}
-                  <span>重新配图</span>
-                </button>
-                <TtsButton
-                  id={contentTtsId}
-                  text={contentSpeechText}
-                  status={tts.getStatus(contentTtsId)}
-                  onPlay={tts.play}
-                  label={tts.progress && tts.activeId === contentTtsId
-                    ? `${tts.progress.current}/${tts.progress.total}`
-                    : "朗读"}
-                />
-              </>
+              <TtsButton
+                id={contentTtsId}
+                text={contentSpeechText}
+                status={tts.getStatus(contentTtsId)}
+                onPlay={tts.play}
+                label={tts.progress && tts.activeId === contentTtsId
+                  ? `${tts.progress.current}/${tts.progress.total}`
+                  : "朗读"}
+              />
             )}
             <button onClick={() => setShowQA(!showQA)}
               className={`flex items-center gap-1.5 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-medium transition-all ${
@@ -606,7 +584,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                       mode={readingPrefs.mode}
                       fontSize={readingPrefs.fontSize}
                       lineHeight={readingPrefs.lineHeight}
-                      progress={readProgress}
+                      progressBarRef={progressBarRef}
                       breakReminder={showBreakReminder && !breakDismissed}
                       onDismissBreak={() => {
                         setBreakDismissed(true);
@@ -630,6 +608,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                         content={content}
                         knowledgeName={todayItem?.title || ""}
                         onQuizSubmitted={handleQuizSubmitted}
+                        deferMermaidRender={isStreaming}
                       />
                       {isStreaming && (
                         <div className="flex items-center gap-2 mt-4 text-[#6E56CF]">

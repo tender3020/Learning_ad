@@ -10,6 +10,7 @@ import {
   illustrationsMatchTargetRatio,
   shouldSkipIllustrationGeneration,
 } from "./services/contentImageService";
+import { stripIllustrationMarkers, hasIllustrationMarkers } from "@shared/illustrationMarkers";
 import { isWanxiangConfigured } from "./lib/wanxiang-image";
 
 type Db = ReturnType<typeof getDb>;
@@ -19,7 +20,6 @@ export async function runIllustrationJob(
   userId: number,
   planId: number,
   dayNumber: number,
-  force = false,
 ): Promise<{
   imageCount: number;
   skipped: boolean;
@@ -72,9 +72,15 @@ export async function runIllustrationJob(
   const learningType = (plan.learningType as LearningType) || "abstract_logic";
 
   if (
-    !force &&
-    (await shouldSkipIllustrationGeneration(content.markdownContent, planId, dayNumber))
+    await shouldSkipIllustrationGeneration(content.markdownContent, planId, dayNumber)
   ) {
+    if (hasIllustrationMarkers(content.markdownContent)) {
+      const stripped = stripIllustrationMarkers(content.markdownContent);
+      await db
+        .update(learningContents)
+        .set({ markdownContent: stripped, updatedAt: new Date() })
+        .where(eq(learningContents.id, content.id));
+    }
     console.info(
       `[content-image] 跳过配图：plan=${planId} day=${dayNumber}（已有 3:2 配图）`,
     );
@@ -102,7 +108,7 @@ export async function runIllustrationJob(
     markdownContent: content.markdownContent,
   });
 
-  if (imageCount > 0 && markdownContent !== content.markdownContent) {
+  if (markdownContent !== content.markdownContent) {
     await db
       .update(learningContents)
       .set({ markdownContent, updatedAt: new Date() })
@@ -260,25 +266,5 @@ export const contentRouter = createRouter({
         .where(eq(learningContents.planId, input.planId));
 
       return contents;
-    }),
-
-  // 根据学习类型为当日内容生成配图（2-3 张，3:2）
-  generateIllustrations: authedQuery
-    .input(
-      z.object({
-        planId: z.number(),
-        dayNumber: z.number(),
-        force: z.boolean().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const db = getDb();
-      return runIllustrationJob(
-        db,
-        ctx.user.id,
-        input.planId,
-        input.dayNumber,
-        input.force ?? false,
-      );
     }),
 });

@@ -1,10 +1,11 @@
+import type { RefObject } from "react";
 import type { ReadingFontSize, ReadingLineHeight, ReadingMode } from "@/hooks/useReadingPrefs";
 
 type ReadingShellProps = {
   mode: ReadingMode;
   fontSize: ReadingFontSize;
   lineHeight: ReadingLineHeight;
-  progress?: number;
+  progressBarRef?: RefObject<HTMLDivElement | null>;
   breakReminder?: boolean;
   onDismissBreak?: () => void;
   children: React.ReactNode;
@@ -31,7 +32,7 @@ export default function ReadingShell({
   mode,
   fontSize,
   lineHeight,
-  progress = 0,
+  progressBarRef,
   breakReminder = false,
   onDismissBreak,
   children,
@@ -41,7 +42,7 @@ export default function ReadingShell({
       className={`reading-shell ${MODE_CLASS[mode]} ${FONT_CLASS[fontSize]} ${LINE_HEIGHT_CLASS[lineHeight]}`}
     >
       <div className="reading-progress" aria-hidden="true">
-        <div className="reading-progress__bar" style={{ width: `${progress}%` }} />
+        <div ref={progressBarRef} className="reading-progress__bar" style={{ width: "0%" }} />
       </div>
 
       {breakReminder && (

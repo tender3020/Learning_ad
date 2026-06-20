@@ -89,6 +89,13 @@ export function parseTypeFromAIResponse(response: string): LearningType {
   return "abstract_logic"; // 默认
 }
 
+const MERMAID_SYNTAX_HINT = `
+【Mermaid 语法要求】
+在推导/概念/流程相关章节内，用标准 \`\`\`mermaid 代码块输出 flowchart 或 graph：
+- 第一行必须是 flowchart TD 或 graph LR（或 sequenceDiagram）
+- 含括号、冒号、斜杠的节点文字必须用双引号包裹，如 A["勾股定理"]
+- 不要使用 HTML 标签`;
+
 /** 根据学习类型获取系统提示词（内容生成） */
 export function getTypeSystemPrompt(type: LearningType, skillLevel: string): string {
   const levelHint = getLevelHint(skillLevel);
@@ -134,6 +141,9 @@ ${commonConstraint}
 7. 常见推导错误（至少3个）：描述典型错误+纠正+解释原因
 8. 今日小结：3-5句话总结核心内容
 
+${MERMAID_SYNTAX_HINT}
+在「推导过程」「今日核心概念」章节内至少输出 1 个 \`\`\`mermaid 代码块，展示概念或推导步骤关系。
+
 【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
 <!-- quiz
 question: ...
@@ -169,6 +179,9 @@ ${commonConstraint}
    - 练习3：独立完成（略有不同的需求，自己写代码实现）
 8. 常见报错（至少3个）：典型报错原文+原因+具体修复方法
 9. 今日小结：总结今天学的概念和练过的操作
+
+${MERMAID_SYNTAX_HINT}
+在「今日概念」或代码流程相关章节内输出 1 个 \`\`\`mermaid 代码块（flowchart 或 sequenceDiagram）。
 
 【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
 <!-- quiz
@@ -519,6 +532,55 @@ function getLevelHint(level: string): string {
 
 export type VisualMedium = "wanxiang" | "mermaid";
 
+/** 按学习类型限制万相 / Mermaid 配图数量 */
+export function applyIllustrationQuotas<T extends { visualMedium: VisualMedium }>(
+  type: LearningType,
+  plans: T[],
+): T[] {
+  const neverMermaid: LearningType[] = [
+    "language",
+    "network_assoc",
+    "perception",
+    "practical",
+  ];
+  const wanxiangMax: Record<LearningType, number> = {
+    abstract_logic: 1,
+    operation_logic: 1,
+    model_apply: 2,
+    language: 3,
+    network_assoc: 3,
+    perception: 3,
+    practical: 3,
+  };
+  const mermaidMax: Record<LearningType, number> = {
+    abstract_logic: 2,
+    operation_logic: 1,
+    model_apply: 1,
+    language: 0,
+    network_assoc: 0,
+    perception: 0,
+    practical: 0,
+  };
+
+  let wanxiang = 0;
+  let mermaid = 0;
+  const result: T[] = [];
+
+  for (const plan of plans) {
+    if (plan.visualMedium === "mermaid") {
+      if (neverMermaid.includes(type) || mermaid >= mermaidMax[type]) continue;
+      mermaid += 1;
+      result.push(plan);
+    } else if (plan.visualMedium === "wanxiang") {
+      if (wanxiang >= wanxiangMax[type]) continue;
+      wanxiang += 1;
+      result.push(plan);
+    }
+  }
+
+  return result;
+}
+
 /** 各学习类型优先配图的章节标题关键词 */
 export function getImageSectionKeywords(type: LearningType): string[] {
   const keywords: Record<LearningType, string[]> = {
@@ -538,6 +600,14 @@ export function getImageMediumForSection(
   type: LearningType,
   sectionTitle: string | null,
 ): VisualMedium {
+  const neverMermaid: LearningType[] = [
+    "language",
+    "network_assoc",
+    "perception",
+    "practical",
+  ];
+  if (neverMermaid.includes(type)) return "wanxiang";
+
   const title = sectionTitle ?? "";
   const diagramKeywords: Record<LearningType, string[]> = {
     abstract_logic: ["推导", "核心概念", "直观理解"],
@@ -555,11 +625,11 @@ export function getImageMediumForSection(
 
 const sectionGuides: Record<LearningType, string> = {
   abstract_logic: `优先章节：「今日核心概念」「推导过程」「直观理解验证」
-- 推导/概念关系 → visualMedium: mermaid（flowchart 或 graph，节点用正文术语）
-- 生活比喻场景 → visualMedium: wanxiang`,
+- 推导/概念关系 → visualMedium: mermaid（flowchart 或 graph，节点用正文术语；服务端会插入 \`\`\`mermaid 代码块，非 PNG）
+- 生活比喻场景 → visualMedium: wanxiang（abstract_logic 最多 1 张万相）`,
   operation_logic: `优先章节：「今日概念」「完整代码示例」「运行结果」
-- 代码执行流程/模块调用 → visualMedium: mermaid（flowchart 或 sequenceDiagram）
-- 终端/编辑器界面场景 → visualMedium: wanxiang`,
+- 代码执行流程/模块调用 → visualMedium: mermaid（flowchart 或 sequenceDiagram，插入正文代码块）
+- 终端/编辑器界面场景 → visualMedium: wanxiang（最多 1 张）`,
   language: `优先章节：「今日场景」「场景对话」「核心句型」
 - 全部使用 visualMedium: wanxiang`,
   network_assoc: `优先章节：「今日叙事」「关键要素卡」「影响与意义」
@@ -589,8 +659,10 @@ ${sectionGuides[type]}
 - anchorText：必须是该章节正文中的**完整句子**（20-40 个汉字），与章节 Markdown 完全一致，不要标题
 - uniqueIdentifiers：从该章节正文摘取 2-4 个专有名词/具体动作/工具/人名/地点，禁止只用「${dayTitle}」
 - visualMedium 为 wanxiang 或 mermaid（见上方类型指引）
-- wanxiang 时填写 subjects/setting/action/style/avoid；mermaid 时填写 mermaidCode
+- visualMedium 为 mermaid 时只填 mermaidCode，不要填 wanxiang 的 subjects/style；mermaid 会以 \`\`\`mermaid 代码块插入正文，由客户端渲染
+- visualMedium 为 wanxiang 时填写 subjects/setting/action/style/avoid
 - mermaidCode 使用 flowchart TD、graph LR 或 sequenceDiagram，节点标签用正文中的具体术语（中文），至少 4 个节点，不要 markdown 代码块包裹
+- mermaid 语法：含括号、冒号的标签用双引号；第一行必须是图表类型声明
 - 禁止空泛描述如「某某主题的教育插画」
 - style 统一：清晰教育风格，柔和配色，3:2 横向构图
 - avoid 必须包含「画面中出现任何文字、水印、logo」（wanxiang 时）

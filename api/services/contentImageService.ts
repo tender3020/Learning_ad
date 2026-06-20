@@ -19,14 +19,14 @@ import {
   WANXIANG_IMAGE_RATIO,
 } from "../lib/wanxiang-image";
 import {
-  renderMermaidToPng,
-  sanitizeMermaidCode,
-  isValidMermaidSyntax,
-} from "../lib/mermaid-render";
+  prepareMermaidCode,
+} from "../lib/mermaid-sanitize";
 import {
   validateImageMatch,
   enhancePromptForRetry,
 } from "../lib/image-validation";
+import { applyIllustrationQuotas } from "@shared/typeEngine";
+import { stripIllustrationMarkers } from "@shared/illustrationMarkers";
 
 export type SceneBrief = {
   anchorText: string;
@@ -342,7 +342,7 @@ export async function extractIllustrationPlans(
 ): Promise<IllustrationPlan[]> {
   const fromMarkers = parseIllustrationMarkers(markdown);
   if (fromMarkers.length >= 2) {
-    return fromMarkers;
+    return applyIllustrationQuotas(learningType, fromMarkers);
   }
 
   const sections = splitMarkdownByH2(markdown);
@@ -377,7 +377,7 @@ export async function extractIllustrationPlans(
     }
   }
 
-  return plans.slice(0, 3);
+  return applyIllustrationQuotas(learningType, plans.slice(0, 3));
 }
 
 /** @deprecated 兼容旧接口 */
@@ -516,6 +516,35 @@ export function stripContentImages(
   return markdown.replace(imagePattern, "\n").replace(diagramPattern, "\n");
 }
 
+/** 在 anchor 段落后插入 Mermaid 代码块（客户端渲染，非 PNG） */
+export function insertMermaidBlockIntoMarkdown(
+  markdown: string,
+  anchorText: string,
+  mermaidCode: string,
+  sectionTitle?: string,
+): string {
+  const block = `\n\n\`\`\`mermaid\n${mermaidCode.trim()}\n\`\`\`\n\n`;
+
+  const pos =
+    findInsertIndexAfterParagraph(markdown, anchorText) ??
+    (sectionTitle ? findInsertIndexAfterHeading(markdown, sectionTitle) : null) ??
+    findInsertIndexAfterHeading(markdown, anchorText.slice(0, 8));
+
+  if (pos === null) {
+    const quizIdx = markdown.indexOf("<!-- quiz");
+    if (quizIdx > 0) {
+      return markdown.slice(0, quizIdx).trimEnd() + block + markdown.slice(quizIdx);
+    }
+    return markdown.trimEnd() + block;
+  }
+
+  if (markdown.slice(pos, pos + 120).includes("```mermaid")) {
+    return markdown;
+  }
+
+  return markdown.slice(0, pos) + block + markdown.slice(pos);
+}
+
 export function insertImagesIntoMarkdown(
   markdown: string,
   items: Array<{ anchorText: string; publicPath: string; alt: string; sectionTitle?: string }>,
@@ -589,23 +618,6 @@ async function generateWanxiangWithValidation(params: {
   await downloadImage(await generateWanxiangImage(prompt), params.filePath);
 }
 
-async function renderMermaidDiagram(
-  mermaidCode: string,
-  filePath: string,
-): Promise<boolean> {
-  const sanitized = sanitizeMermaidCode(mermaidCode);
-  if (!isValidMermaidSyntax(sanitized)) return false;
-
-  try {
-    const buffer = await renderMermaidToPng(sanitized);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, buffer);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function generateContentIllustrations(params: {
   planId: number;
   dayNumber: number;
@@ -620,7 +632,10 @@ export async function generateContentIllustrations(params: {
   );
 
   if (plans.length === 0) {
-    return { imageCount: 0, markdownContent: params.markdownContent };
+    return {
+      imageCount: 0,
+      markdownContent: stripIllustrationMarkers(params.markdownContent),
+    };
   }
 
   const wanxiangAvailable = isWanxiangConfigured();
@@ -640,9 +655,36 @@ export async function generateContentIllustrations(params: {
   await fs.mkdir(contentImagesDir(params.planId, params.dayNumber), {
     recursive: true,
   });
-  await fs.mkdir(contentDiagramsDir(params.planId, params.dayNumber), {
-    recursive: true,
-  });
+
+  let markdown = cleanMarkdown;
+  let illustrationCount = 0;
+
+  const mermaidPlans = plans.filter(
+    (p) => p.visualMedium === "mermaid" && p.mermaidCode,
+  );
+  const wanxiangPlans = plans.filter(
+    (p) => p.visualMedium === "wanxiang" && p.prompt,
+  );
+
+  for (const plan of mermaidPlans) {
+    const code = prepareMermaidCode(plan.mermaidCode!);
+    if (!code) {
+      console.warn(
+        `[content-image] mermaid 语法无效，跳过 plan=${params.planId} day=${params.dayNumber}`,
+      );
+      continue;
+    }
+    const next = insertMermaidBlockIntoMarkdown(
+      markdown,
+      plan.anchorText,
+      code,
+      plan.sectionTitle,
+    );
+    if (next !== markdown) {
+      markdown = next;
+      illustrationCount += 1;
+    }
+  }
 
   const inserted: Array<{
     anchorText: string;
@@ -653,93 +695,53 @@ export async function generateContentIllustrations(params: {
 
   let imageIndex = 0;
 
-  for (const plan of plans) {
+  for (const plan of wanxiangPlans) {
+    if (!wanxiangAvailable || !plan.prompt) continue;
+
     const alt =
       plan.anchorText.length > 24
         ? plan.anchorText.slice(0, 24) + "…"
         : plan.anchorText;
 
     try {
-      if (plan.visualMedium === "mermaid" && plan.mermaidCode) {
-        const filename = `${imageIndex}.png`;
-        const filePath = path.join(
-          contentDiagramsDir(params.planId, params.dayNumber),
-          filename,
-        );
-        const ok = await renderMermaidDiagram(plan.mermaidCode, filePath);
-        if (!ok && wanxiangAvailable) {
-          const fallbackPrompt =
-            plan.prompt ??
-            buildWanxiangPromptFromBrief({
-              anchorText: plan.anchorText,
-              visualMedium: "wanxiang",
-              uniqueIdentifiers: plan.uniqueIdentifiers,
-              subjects: plan.uniqueIdentifiers.slice(0, 2),
-              style: "清晰教育插画，柔和配色，3:2 横向构图",
-              avoid: ["画面中出现任何文字、水印、logo"],
-            });
-          const imgPath = path.join(
-            contentImagesDir(params.planId, params.dayNumber),
-            filename,
-          );
-          await generateWanxiangWithValidation({
-            prompt: fallbackPrompt,
-            filePath: imgPath,
-            anchorText: plan.anchorText,
-            uniqueIdentifiers: plan.uniqueIdentifiers,
-          });
-          inserted.push({
-            anchorText: plan.anchorText,
-            publicPath: `/uploads/content-images/${params.planId}/${params.dayNumber}/${filename}`,
-            alt,
-            sectionTitle: plan.sectionTitle,
-          });
-        } else if (ok) {
-          inserted.push({
-            anchorText: plan.anchorText,
-            publicPath: `/uploads/content-diagrams/${params.planId}/${params.dayNumber}/${filename}`,
-            alt,
-            sectionTitle: plan.sectionTitle,
-          });
-        }
-        imageIndex += 1;
-        continue;
-      }
-
-      if (plan.visualMedium === "wanxiang" && plan.prompt && wanxiangAvailable) {
-        const filename = `${imageIndex}.png`;
-        const filePath = path.join(
-          contentImagesDir(params.planId, params.dayNumber),
-          filename,
-        );
-        await generateWanxiangWithValidation({
-          prompt: plan.prompt,
-          filePath,
-          anchorText: plan.anchorText,
-          uniqueIdentifiers: plan.uniqueIdentifiers,
-        });
-        inserted.push({
-          anchorText: plan.anchorText,
-          publicPath: `/uploads/content-images/${params.planId}/${params.dayNumber}/${filename}`,
-          alt,
-          sectionTitle: plan.sectionTitle,
-        });
-        imageIndex += 1;
-      }
+      const filename = `${imageIndex}.png`;
+      const filePath = path.join(
+        contentImagesDir(params.planId, params.dayNumber),
+        filename,
+      );
+      await generateWanxiangWithValidation({
+        prompt: plan.prompt,
+        filePath,
+        anchorText: plan.anchorText,
+        uniqueIdentifiers: plan.uniqueIdentifiers,
+      });
+      inserted.push({
+        anchorText: plan.anchorText,
+        publicPath: `/uploads/content-images/${params.planId}/${params.dayNumber}/${filename}`,
+        alt,
+        sectionTitle: plan.sectionTitle,
+      });
+      imageIndex += 1;
+      illustrationCount += 1;
     } catch (error) {
       console.error(
-        `[content-image] 生成失败 plan=${params.planId} day=${params.dayNumber} #${imageIndex}:`,
+        `[content-image] 万相生成失败 plan=${params.planId} day=${params.dayNumber} #${imageIndex}:`,
         error instanceof Error ? error.message : error,
       );
     }
   }
 
-  if (inserted.length === 0) {
-    return { imageCount: 0, markdownContent: cleanMarkdown };
+  if (inserted.length > 0) {
+    markdown = insertImagesIntoMarkdown(markdown, inserted);
   }
 
-  const markdownContent = insertImagesIntoMarkdown(cleanMarkdown, inserted);
-  return { imageCount: inserted.length, markdownContent };
+  markdown = stripIllustrationMarkers(markdown);
+
+  if (illustrationCount === 0) {
+    return { imageCount: 0, markdownContent: markdown };
+  }
+
+  return { imageCount: illustrationCount, markdownContent: markdown };
 }
 
 export function getUploadsRoot(): string {

@@ -408,10 +408,47 @@
 .markdown-body .mermaid-diagram {
   margin: 1rem 0;
   padding: 1rem;
+  min-height: 120px;
   border-radius: 12px;
   background: var(--pre-bg);
   border: 1px solid var(--pre-border);
   overflow-x: auto;
+  overflow-y: visible;
+}
+
+.markdown-body .mermaid-diagram-pending {
+  opacity: 0.35;
+}
+
+.markdown-body .mermaid-diagram-error {
+  margin: 1rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.markdown-body .mermaid-diagram-error-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font-size: inherit;
+}
+
+.markdown-body .mermaid-diagram-error-detail {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #dc2626;
+  font-family: ui-monospace, monospace;
 }
 
 .markdown-body .mermaid-diagram svg {
@@ -425,13 +462,14 @@
   display: block;
   width: min(72%, 480px);
   max-width: 480px;
+  min-height: 160px;
   aspect-ratio: 3 / 2;
   height: auto;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
   margin: 0.6rem auto 1rem;
-  border-radius: 0;
-  border: 1px solid var(--pre-border);
+  border-radius: 8px;
+  border: 1px solid var(--reading-card-border, var(--pre-border));
   background: var(--pre-bg);
 }
 
@@ -686,8 +724,6 @@
   font-size: calc(var(--reading-font-size) * 1.2);
   font-weight: 600;
   margin: 1.5rem 0 0.75rem;
-  padding-bottom: 0.35rem;
-  border-bottom: 1px solid var(--reading-card-border);
 }
 
 .markdown-body.reading .reading-h3 {

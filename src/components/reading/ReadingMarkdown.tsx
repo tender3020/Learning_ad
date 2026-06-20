@@ -1,3 +1,4 @@
+import { memo } from "react";
 import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
 import { splitContentWithQuizzes, QuizCard } from "@/components/quiz/QuizRenderer";
 import SectionCard from "./SectionCard";
@@ -11,16 +12,18 @@ interface ReadingMarkdownProps {
   content: string;
   knowledgeName?: string;
   onQuizSubmitted?: () => void;
+  deferMermaidRender?: boolean;
 }
 
 export function getReadingTocItems(content: string) {
   return extractTocFromMarkdown(content);
 }
 
-export default function ReadingMarkdown({
+function ReadingMarkdown({
   content,
   knowledgeName = "",
   onQuizSubmitted,
+  deferMermaidRender = false,
 }: ReadingMarkdownProps) {
   const parts = splitContentWithQuizzes(content);
 
@@ -55,6 +58,7 @@ export default function ReadingMarkdown({
               onQuizSubmitted={onQuizSubmitted}
               variant="reading"
               className="reading"
+              deferMermaidRender={deferMermaidRender}
             />
           </SectionCard>
         ));
@@ -62,3 +66,5 @@ export default function ReadingMarkdown({
     </div>
   );
 }
+
+export default memo(ReadingMarkdown);

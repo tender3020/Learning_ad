@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import mermaid from "mermaid";
 
 function isLightTheme() {
@@ -48,17 +48,22 @@ function configureMermaid() {
 
 interface MermaidDiagramProps {
   chart: string;
+  deferRender?: boolean;
 }
 
-export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+function MermaidDiagram({ chart, deferRender = false }: MermaidDiagramProps) {
   const reactId = useId().replace(/:/g, "");
   const renderCountRef = useRef(0);
+  const [svgHtml, setSvgHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(true);
 
   useEffect(() => {
     const trimmed = chart.trim();
-    if (!trimmed) return;
+    if (!trimmed || deferRender) {
+      setSvgHtml(null);
+      return;
+    }
 
     let cancelled = false;
     const timer = setTimeout(async () => {
@@ -67,16 +72,16 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
 
       try {
         const { svg } = await mermaid.render(renderId, trimmed);
-        if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg;
+        if (!cancelled) {
+          setSvgHtml(svg);
           setError(null);
         }
       } catch (err) {
-        // 记录错误供调试，但在流式传输时忽略不完整的语法
         const errorMessage = err instanceof Error ? err.message : String(err);
         console.error(`[Mermaid Render Error] ${renderId}:`, errorMessage);
         if (!cancelled) {
           setError(errorMessage);
+          setSvgHtml(null);
         }
       }
     }, 200);
@@ -85,24 +90,23 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [chart, reactId]);
+  }, [chart, reactId, deferRender]);
 
-  // Re-render when light/dark theme toggles
   useEffect(() => {
+    if (deferRender) return;
+
     const observer = new MutationObserver(() => {
       renderCountRef.current++;
       const trimmed = chart.trim();
-      if (!trimmed || !containerRef.current) return;
+      if (!trimmed) return;
 
       configureMermaid();
       const renderId = `mermaid-${reactId}-${renderCountRef.current}`;
       mermaid
         .render(renderId, trimmed)
         .then(({ svg }) => {
-          if (containerRef.current) {
-            containerRef.current.innerHTML = svg;
-            setError(null);
-          }
+          setSvgHtml(svg);
+          setError(null);
         })
         .catch((err) => {
           const errorMessage = err instanceof Error ? err.message : String(err);
@@ -117,35 +121,39 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
     });
 
     return () => observer.disconnect();
-  }, [chart, reactId]);
+  }, [chart, reactId, deferRender]);
 
   if (!chart.trim()) return null;
 
-  // 显示错误消息便于调试
+  if (deferRender) {
+    return <div className="mermaid-diagram mermaid-diagram-pending" aria-hidden />;
+  }
+
   if (error) {
     return (
-      <div
-        className="mermaid-diagram-error"
-        style={{
-          padding: "12px",
-          marginTop: "1rem",
-          marginBottom: "1rem",
-          background: "rgba(239, 68, 68, 0.1)",
-          border: "1px solid rgba(239, 68, 68, 0.3)",
-          borderRadius: "8px",
-          fontSize: "0.85rem",
-          color: "#dc2626",
-          fontFamily: "monospace",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
-        <strong>Mermaid 图表错误:</strong>
-        <br />
-        {error}
+      <div className="mermaid-diagram-error">
+        <button
+          type="button"
+          className="mermaid-diagram-error-toggle"
+          onClick={() => setCollapsed((v) => !v)}
+        >
+          Mermaid 图表无法渲染 {collapsed ? "▸" : "▾"}
+        </button>
+        {!collapsed && <pre className="mermaid-diagram-error-detail">{error}</pre>}
       </div>
     );
   }
 
-  return <div className="mermaid-diagram" ref={containerRef} />;
+  if (!svgHtml) {
+    return <div className="mermaid-diagram mermaid-diagram-pending" aria-hidden />;
+  }
+
+  return (
+    <div
+      className="mermaid-diagram"
+      dangerouslySetInnerHTML={{ __html: svgHtml }}
+    />
+  );
 }
+
+export default memo(MermaidDiagram);

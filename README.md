@@ -14,7 +14,7 @@
 | **Onboarding 引导** | 输入目标 → AI 类型判定 → 能力评估（L1–L5）→ 生成 N 天学习大纲 |
 | **DeepSeek 流式授课** | SSE 实时生成 Markdown 学习内容，含公式（KaTeX）、代码、Mermaid 图表与 embedded quiz |
 | **阅读模式** | 按 H2 章节卡片展示，支持目录、字号/行距调节、专注模式、阅读进度 |
-| **智能配图** | 保存内容后异步生成 2–3 张/天：场景用阿里云万相，概念/流程用 Mermaid 渲染为 PNG；支持「重新配图」 |
+| **智能配图** | 保存内容后异步生成 2–3 张/天：场景用阿里云万相；概念/流程图插入 ` ```mermaid ` 代码块由客户端渲染 |
 | **TTS 朗读** | 火山引擎豆包语音，按句流水线播放当日学习内容 |
 | **能力评估系统** | 5 级能力评测（L1–L5），影响内容生成难度 |
 | **交互式答题** | 学习内容嵌入 `<!-- quiz -->` 选择题，答完即时反馈并计入掌握度 |
@@ -190,14 +190,13 @@ Markdown 全文
   → 解析 <!-- illustration --> 标记（优先）或按 H2 分段
   → DeepSeek 提取 sceneBrief（主体、场景、uniqueIdentifiers）
   → 分流：wanxiang（场景插画）/ mermaid（概念流程图）
-  → 万相 2K + thinking_mode / mermaid.ink 渲染 PNG
-  → 可选 qwen-vl 视觉校验 + 一次 retry
+  → 万相 2K + thinking_mode；mermaid 经 sanitize 后以 ```mermaid 代码块插入正文
+  → 可选 qwen-vl 视觉校验 + 一次 retry（仅万相）
   → 按 anchorText 插入 markdown
-  → 存储于 data/uploads/content-images/ 或 content-diagrams/
+  → 万相图存储于 data/uploads/content-images/；Mermaid 由前端 MermaidDiagram 渲染
 ```
 
-- 每日 **2–3 张**，不配置 `DASHSCOPE_API_KEY` 时跳过万相，Mermaid 图表仍可生成
-- Study 页「重新配图」调用 `content.generateIllustrations`（`force: true`）
+- 每日 **2–3 张**（万相 + 内嵌 Mermaid 合计），不配置 `DASHSCOPE_API_KEY` 时跳过万相，Mermaid 仍可插入
 
 ## 快速开始
 
@@ -318,7 +317,8 @@ Study 页点击生成
 │   └── lib/
 │       ├── deepseek.ts         # DeepSeek HTTP 客户端
 │       ├── wanxiang-image.ts   # 万相文生图
-│       ├── mermaid-render.ts   # Mermaid → PNG
+│       ├── mermaid-sanitize.ts # Mermaid 语法修复与校验
+│       ├── mermaid-render.ts   # 遗留 PNG 渲染（配图流程不再使用）
 │       ├── volcengine-tts.ts   # TTS
 │       └── env.ts              # 环境变量
 ├── shared/
@@ -367,7 +367,7 @@ Study 页点击生成
 ### Q: 配图不显示？
 
 1. 检查 `.env` 中 `DASHSCOPE_API_KEY` 是否配置（万相插画需要）
-2. 保存内容后等待后台生成（约 1–3 分钟），或点击 Study 页「重新配图」
+2. 保存内容后等待后台生成（约 1–3 分钟）
 3. 抽象/操作类内容可能使用 Mermaid 图表，存于 `/uploads/content-diagrams/`
 
 ### Q: 如何降低配图 API 成本？

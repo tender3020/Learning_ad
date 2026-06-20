@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -7,6 +8,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { splitContentWithQuizzes, QuizCard } from "@/components/quiz/QuizRenderer";
 import MermaidDiagram from "./MermaidDiagram";
+import { stripIllustrationMarkers } from "@shared/illustrationMarkers";
 
 export type MarkdownVariant = "default" | "reading";
 
@@ -16,6 +18,7 @@ interface MarkdownRendererProps {
   knowledgeName?: string;
   onQuizSubmitted?: () => void;
   variant?: MarkdownVariant;
+  deferMermaidRender?: boolean;
 }
 
 /**
@@ -35,16 +38,24 @@ function preprocessMath(content: string): string {
   );
 }
 
+function preprocessContent(content: string): string {
+  return preprocessMath(stripIllustrationMarkers(content));
+}
+
 export default function MarkdownRenderer({
   content,
   className = "",
   knowledgeName = "",
   onQuizSubmitted,
   variant = "default",
+  deferMermaidRender = false,
 }: MarkdownRendererProps) {
-  const processedContent = preprocessMath(content);
+  const processedContent = preprocessContent(content);
   const parts = splitContentWithQuizzes(processedContent);
-  const markdownComponents = getMarkdownComponents(variant);
+  const markdownComponents = useMemo(
+    () => getMarkdownComponents(variant, deferMermaidRender),
+    [variant, deferMermaidRender],
+  );
 
   return (
     <div className={`markdown-body ${variant === "reading" ? "reading" : ""} ${className}`}>
@@ -77,6 +88,7 @@ export default function MarkdownRenderer({
 
 function getMarkdownComponents(
   variant: MarkdownVariant,
+  deferMermaidRender: boolean,
 ): React.ComponentProps<typeof ReactMarkdown>["components"] {
   const isReading = variant === "reading";
 
@@ -90,7 +102,7 @@ function getMarkdownComponents(
       const codeString = String(children).replace(/\n$/, "");
 
       if (language === "mermaid") {
-        return <MermaidDiagram chart={codeString} />;
+        return <MermaidDiagram chart={codeString} deferRender={deferMermaidRender} />;
       }
 
       if (language) {
@@ -148,7 +160,7 @@ function getMarkdownComponents(
     ),
     h2: ({ children }) => (
       <h2
-        className={isReading ? "reading-h2" : "text-xl font-semibold mt-5 mb-3"}
+        className={isReading ? "reading-h3" : "text-xl font-semibold mt-5 mb-3"}
         style={{ color: "var(--reading-text-heading, var(--text-primary))" }}
       >
         {children}
@@ -188,6 +200,17 @@ function getMarkdownComponents(
     ),
     li: ({ children }) => (
       <li className={isReading ? "reading-li" : "my-1.5"}>{children}</li>
+    ),
+    hr: () => (
+      <hr
+        className="reading-hr"
+        style={{
+          border: "none",
+          height: "1px",
+          background: "var(--reading-card-border, rgba(255,255,255,0.06))",
+          margin: "1.5rem 0",
+        }}
+      />
     ),
     blockquote: ({ children }) => (
       <blockquote
