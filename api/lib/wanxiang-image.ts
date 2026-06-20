@@ -1,7 +1,7 @@
 import { env } from "./env";
 
-/** 3:2 横向，总像素在万相文生图允许范围内 */
-export const WANXIANG_IMAGE_SIZE = "1536*1024";
+/** 3:2 横向；2K 预设由万相按近 3:2 输出，兼容旧 1536×1024 */
+export const WANXIANG_IMAGE_SIZE = env.dashscopeImageSize;
 export const WANXIANG_IMAGE_RATIO = 3 / 2;
 
 type WanxiangContentItem = {
@@ -54,7 +54,7 @@ export async function generateWanxiangImage(prompt: string): Promise<string> {
         size: WANXIANG_IMAGE_SIZE,
         n: 1,
         watermark: false,
-        thinking_mode: false,
+        thinking_mode: true,
       },
     }),
   });

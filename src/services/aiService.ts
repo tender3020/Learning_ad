@@ -56,6 +56,25 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+/** 将浏览器 fetch 原生错误转为可操作的提示 */
+function formatFetchError(error: unknown): string {
+  if (!(error instanceof Error)) return "未知错误";
+
+  const msg = error.message.toLowerCase();
+  if (
+    error.name === "TypeError" &&
+    (msg.includes("failed to fetch") ||
+      msg.includes("networkerror") ||
+      msg.includes("load failed"))
+  ) {
+    return "无法连接服务器，请确认已在项目目录运行 npm run dev，并访问 http://localhost:3000";
+  }
+  if (error.name === "AbortError") {
+    return "请求已取消";
+  }
+  return error.message;
+}
+
 export interface QAStreamCallbacks extends StreamCallbacks {
   onDone?: (qaId: number) => void;
 }
@@ -175,7 +194,7 @@ export class AIService {
       if (error instanceof Error && error.name === "AbortError") {
         callbacks.onError("回答已取消");
       } else {
-        callbacks.onError(error instanceof Error ? error.message : "未知错误");
+        callbacks.onError(formatFetchError(error));
       }
     }
   }
@@ -246,7 +265,7 @@ export class AIService {
       if (error instanceof Error && error.name === "AbortError") {
         callbacks.onError("生成已取消");
       } else {
-        callbacks.onError(error instanceof Error ? error.message : "未知错误");
+        callbacks.onError(formatFetchError(error));
       }
     }
   }

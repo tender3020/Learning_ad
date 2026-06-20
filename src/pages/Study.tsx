@@ -25,6 +25,7 @@ import {
   GraduationCap,
   X,
   Menu,
+  Image as ImageIcon,
 } from "lucide-react";
 
 export default function Study() {
@@ -85,6 +86,40 @@ export default function Study() {
     { enabled: !!store.currentPlanId }
   );
   const utils = trpc.useUtils();
+
+  const [isRegeneratingImages, setIsRegeneratingImages] = useState(false);
+
+  const regenerateIllustrations = trpc.content.generateIllustrations.useMutation({
+    onSuccess: (result) => {
+      setIsRegeneratingImages(false);
+      const planId = store.currentPlanId || 0;
+      const dayNumber = store.currentDay;
+      utils.content.getContent.invalidate({ planId, dayNumber });
+      if (result.imageCount > 0) {
+        let polls = 0;
+        const pollTimer = setInterval(() => {
+          polls += 1;
+          utils.content.getContent.invalidate({ planId, dayNumber });
+          if (polls >= 12) clearInterval(pollTimer);
+        }, 15000);
+      }
+    },
+    onError: (err) => {
+      setIsRegeneratingImages(false);
+      setError(err.message);
+    },
+  });
+
+  const handleRegenerateIllustrations = () => {
+    if (!store.currentPlanId || !content.trim()) return;
+    setIsRegeneratingImages(true);
+    setError("");
+    regenerateIllustrations.mutate({
+      planId: store.currentPlanId,
+      dayNumber: store.currentDay,
+      force: true,
+    });
+  };
 
   const saveContent = trpc.content.saveContent.useMutation({
     onSuccess: () => {
@@ -502,15 +537,31 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
               </span>
             )}
             {content && !isStreaming && (
-              <TtsButton
-                id={contentTtsId}
-                text={contentSpeechText}
-                status={tts.getStatus(contentTtsId)}
-                onPlay={tts.play}
-                label={tts.progress && tts.activeId === contentTtsId
-                  ? `${tts.progress.current}/${tts.progress.total}`
-                  : "朗读"}
-              />
+              <>
+                <button
+                  type="button"
+                  onClick={handleRegenerateIllustrations}
+                  disabled={isRegeneratingImages}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium liquid-glass text-[#8A8A8E] hover:text-[#F5F5F7] disabled:opacity-50 transition-all"
+                  title="重新生成配图"
+                >
+                  {isRegeneratingImages ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <ImageIcon size={14} />
+                  )}
+                  <span>重新配图</span>
+                </button>
+                <TtsButton
+                  id={contentTtsId}
+                  text={contentSpeechText}
+                  status={tts.getStatus(contentTtsId)}
+                  onPlay={tts.play}
+                  label={tts.progress && tts.activeId === contentTtsId
+                    ? `${tts.progress.current}/${tts.progress.total}`
+                    : "朗读"}
+                />
+              </>
             )}
             <button onClick={() => setShowQA(!showQA)}
               className={`flex items-center gap-1.5 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-medium transition-all ${

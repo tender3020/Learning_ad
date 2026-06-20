@@ -19,6 +19,7 @@ export async function runIllustrationJob(
   userId: number,
   planId: number,
   dayNumber: number,
+  force = false,
 ): Promise<{
   imageCount: number;
   skipped: boolean;
@@ -27,9 +28,8 @@ export async function runIllustrationJob(
 }> {
   if (!isWanxiangConfigured()) {
     console.warn(
-      "[content-image] 跳过配图：DASHSCOPE_API_KEY 未加载（请重启 dev 服务后再试）",
+      "[content-image] DASHSCOPE_API_KEY 未配置，万相插画将跳过（Mermaid 图表仍可生成）",
     );
-    return { imageCount: 0, skipped: true, reason: "no_api_key" };
   }
 
   const [contentRows, planRows, outlineRows] = await Promise.all([
@@ -71,7 +71,10 @@ export async function runIllustrationJob(
   const dayTitle = outlineRows[0]?.title || `第 ${dayNumber} 天`;
   const learningType = (plan.learningType as LearningType) || "abstract_logic";
 
-  if (await shouldSkipIllustrationGeneration(content.markdownContent, planId, dayNumber)) {
+  if (
+    !force &&
+    (await shouldSkipIllustrationGeneration(content.markdownContent, planId, dayNumber))
+  ) {
     console.info(
       `[content-image] 跳过配图：plan=${planId} day=${dayNumber}（已有 3:2 配图）`,
     );
@@ -265,6 +268,7 @@ export const contentRouter = createRouter({
       z.object({
         planId: z.number(),
         dayNumber: z.number(),
+        force: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -274,6 +278,7 @@ export const contentRouter = createRouter({
         ctx.user.id,
         input.planId,
         input.dayNumber,
+        input.force ?? false,
       );
     }),
 });

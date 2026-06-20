@@ -1,179 +1,171 @@
 # 弈智 AI 学习成长系统
 
-> 基于 DeepSeek AI 的自适应学习平台，为每位学习者量身定制个性化学习路径。
+> 基于 DeepSeek 的自适应学习平台：自动判定学习类型，为每位学习者生成个性化大纲、每日内容与配图。
 
 ## 项目概览
 
-弈智是一个全栈 AI 驱动的学习平台，通过 DeepSeek 大模型实现智能课程生成、个性化授课、交互式答题和掌握度追踪。系统采用自适应学习算法，根据学生的学习数据动态调整学习节奏和难度。
+弈智是一个全栈 AI 驱动的学习平台，通过 DeepSeek 大模型实现智能课程生成、流式授课、交互式答题和掌握度追踪。系统内置 **7 类学习引擎**，根据学习目标自动选择内容模板；支持万相 AI 插画与 Mermaid 图表混合配图、TTS 朗读、阅读模式与按天隔离的 AI 问答。
 
 ## 核心功能
 
-### Mermaid 图表支持
-- 网络关联型内容现在支持自动渲染因果网络图
-- 使用标准的mermaid语法，在代码块中使用```mermaid标记
-- 支持flowchart、graph等多种图表类型
-- 自动适配暗色主题，与整体UI风格一致
-
 | 模块 | 功能描述 |
 |------|----------|
-| **AI 学习计划生成** | 输入学习目标，AI 自动生成 N 天的结构化学习大纲 |
-| **DeepSeek 流式授课** | AI 实时生成 Markdown 格式的学习内容，含知识讲解和代码示例 |
-| **能力评估系统** | 支持 5 级能力评测（L1-L5），自适应调整难度 |
-| **交互式答题系统** | 学习内容中嵌入选择题，答完即时反馈对错和解析 |
-| **AI 问答辅导** | 学习过程中随时向 AI 导师提问，结合上下文智能回答 |
+| **7 类学习引擎** | 自动判定抽象逻辑 / 操作逻辑 / 语言 / 网络关联 / 模型应用 / 感知表达 / 实践技艺，各有独立大纲与内容模板（`shared/typeEngine.ts`） |
+| **Onboarding 引导** | 输入目标 → AI 类型判定 → 能力评估（L1–L5）→ 生成 N 天学习大纲 |
+| **DeepSeek 流式授课** | SSE 实时生成 Markdown 学习内容，含公式（KaTeX）、代码、Mermaid 图表与 embedded quiz |
+| **阅读模式** | 按 H2 章节卡片展示，支持目录、字号/行距调节、专注模式、阅读进度 |
+| **智能配图** | 保存内容后异步生成 2–3 张/天：场景用阿里云万相，概念/流程用 Mermaid 渲染为 PNG；支持「重新配图」 |
+| **TTS 朗读** | 火山引擎豆包语音，按句流水线播放当日学习内容 |
+| **能力评估系统** | 5 级能力评测（L1–L5），影响内容生成难度 |
+| **交互式答题** | 学习内容嵌入 `<!-- quiz -->` 选择题，答完即时反馈并计入掌握度 |
+| **AI 问答辅导** | 按天隔离上下文，SSE 流式回答，结合当日全文 |
 | **掌握度分析** | 四维加权算法实时计算知识点掌握程度 |
-| **多计划管理** | 支持同时管理 7 个学习计划，可自由切换 |
-| **学习历史追踪** | 记录所有问答交互和答题记录，支持回顾 |
+| **多计划管理** | 最多 7 个并行学习计划，支持切换 / 暂停 / 完成 |
+| **学习历史** | 问答与答题记录回顾（History 页） |
 | **用户数据隔离** | localStorage 按用户 ID 隔离，切换账户不串数据 |
-| **主题切换** | 支持深色/浅色模式切换 |
-| **浏览器通知** | 学习提醒和新内容推送 |
+| **浏览器通知** | Settings 中可选开启学习提醒（需用户授权） |
+
+### 7 类学习引擎
+
+| 类型 | 英文名 | 适用场景 |
+|------|--------|----------|
+| 抽象逻辑型 | `abstract_logic` | 数学、物理、统计等需推导的理论 |
+| 操作逻辑型 | `operation_logic` | 编程、软件、命令行等动手操作 |
+| 语言学习型 | `language` | 英语、日语等自然语言 |
+| 网络关联型 | `network_assoc` | 历史、法律、政治等叙事因果 |
+| 模型应用型 | `model_apply` | 金融、经济、管理等模型套用 |
+| 感知表达型 | `perception` | 绘画、摄影、写作等审美创作 |
+| 实践技艺型 | `practical` | 烹饪、驾驶、急救等操作流程 |
+
+### Markdown 增强
+
+- **Mermaid**：在代码块中使用 ` ```mermaid ` 标记，支持 flowchart、graph、sequenceDiagram 等，自动适配暗色主题
+- **KaTeX**：行内 `$...$` 与块级 `$$...$$` 数学公式
+- **配图意图标记**（内容生成时预埋）：`<!-- illustration: {"anchor":"...","intent":"...","medium":"wanxiang\|mermaid"} -->`
 
 ## 技术架构
+
+### 开发态请求流
+
+```mermaid
+flowchart LR
+  Browser --> ViteDev[Vite_port_3000]
+  ViteDev -->|"/api/*"| Hono[api_boot_ts]
+  ViteDev -->|"/uploads/*"| Static[data_uploads]
+  Hono --> tRPC[tRPC_routers]
+  Hono --> Stream["/api/ai/stream"]
+  Hono --> TTS["/api/tts/speak"]
+  Stream --> DeepSeek[DeepSeek_API]
+```
+
+开发模式下，Vite 与 Hono 通过 `@hono/vite-dev-server` 一体运行：前端页面与 `/api/*`、`/uploads/*` 均走 **同一端口 3000**。
 
 ### 前端
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| React | 19.2.0 | UI 框架 |
-| React Router | 7.6.1 | 路由管理 |
-| TypeScript | 5.9.3 | 类型安全 |
-| Vite | 7.2.4 | 构建工具 |
-| Tailwind CSS + shadcn/ui | - | 样式系统 |
-| Framer Motion | 12.40.0 | 动画效果 |
-| Three.js (@react-three/fiber) | 9.6.1 | 3D 星轨背景 |
-| React Markdown + Syntax Highlighter | 10.1.0 / 16.1.1 | Markdown 渲染和代码高亮 |
-| Recharts | 2.15.4 | 数据可视化图表 |
-| React Query | 5.90.16 | 异步数据获取与缓存 |
-| Zustand | 5.0.14 | 状态管理 |
-| tRPC Client | 11.8.1 | 类型安全的 API 调用 |
-| KaTeX | 0.17.0 | 数学公式渲染 |
+| React | 19.2 | UI 框架 |
+| React Router | 7.6 | 路由 |
+| TypeScript | 5.9 | 类型安全 |
+| Vite | 7.2 | 构建与 dev server |
+| Tailwind CSS + shadcn/ui | - | 样式与组件 |
+| Framer Motion | 12.40 | 动画 |
+| Three.js (@react-three/fiber) | 9.6 | 3D 背景 |
+| React Markdown + KaTeX + Mermaid | - | 内容渲染 |
+| TanStack Query + tRPC Client | 11.8 | 数据获取 |
+| Zustand | 5.0 | 状态管理 |
+| Recharts | 2.15 | 图表 |
 
 ### 后端
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Hono | 4.8.3 | HTTP 框架 |
-| tRPC Server | 11.8.1 | 端到端类型安全 API |
-| Drizzle ORM | 0.45.1 | 数据库 ORM |
-| MySQL 2 | 3.14.1 | MySQL 驱动 |
-| MySQL / TiDB | - | 数据库 |
-| DeepSeek API | - | AI 内容生成 |
-| JWT (jose) | 6.1.3 | 身份认证 |
-| AWS S3 SDK | 3.965.0 | 文件存储 |
-| dotenv | 17.2.3 | 环境变量管理 |
+| Hono | 4.8 | HTTP 框架 |
+| tRPC Server | 11.8 | 类型安全 API |
+| Drizzle ORM + MySQL2 | - | 数据库 |
+| DeepSeek API | - | 文本生成（大纲、内容、评估、问答、配图 prompt） |
+| 阿里云百炼万相 | - | 场景插画（可选） |
+| 火山引擎 TTS | - | 语音朗读（可选） |
+| qwen-vl | - | 配图视觉校验（可选，可关闭） |
+| JWT (jose) | - | 身份认证 |
 
-### 开发工具
+### 共享层
 
-- **TypeScript** - 类型安全和代码质量
-- **ESLint** - 代码规范检查
-- **Prettier** - 代码格式化
-- **Vitest** - 单元测试框架
-- **Drizzle Kit** - 数据库迁移工具
+| 路径 | 用途 |
+|------|------|
+| `shared/typeEngine.ts` | 7 类学习类型判定与各阶段 prompt 模板 |
+| `shared/markdownSections.ts` | Markdown H2 章节切分（前后端共用） |
+| `contracts/` | 共享类型与错误码 |
 
 ## 数据库 Schema
 
 ### 核心表
 
-- `users` - 用户表（手机号登录）
-- `verification_codes` - 验证码表
-- `learning_plans` - 学习计划表（支持 7 个并行计划）
-- `learning_outline` - 学习大纲表（每天的主题）
-- `learning_contents` - 学习内容表（AI 生成的 Markdown）
+- `users` / `verification_codes` — 手机号登录与验证码
+- `learning_plans` — 学习计划（含 `learningType`、`currentDay`、状态）
+- `learning_outline` — 每日大纲（标题、目标、关键词）
+- `learning_contents` — 每日 Markdown 内容
 
 ### 学习追踪表
 
-- `study_sessions` - 学习会话记录（包含时长追踪）
-- `quiz_results` - 答题记录表
-- `qa_history` - 问答历史表
-- `mastery_scores` - 掌握度评分表
+- `study_sessions` — 学习时长
+- `quiz_results` — 答题记录（含 attempt 权重）
+- `qa_history` — 问答历史（按 plan + day 隔离）
+- `mastery_scores` — 掌握度评分
 
-### 评估表
+### 评估与任务
 
-- `assessments` - 能力评估记录（5 级评测）
-- `assessment_answers` - 评估答题细节表
-
-### 后台表
-
-- `generation_tasks` - AI 生成任务状态表（支持进度追踪）
+- `assessments` / `assessment_answers` — 能力评估
+- `generation_tasks` — AI 生成任务状态
 
 ## 掌握度分析算法
 
-掌握度评分采用**四维加权模型**，综合评估学习者对知识点的理解程度：
+四维加权模型（实现于 `api/services/masteryService.ts`）：
 
 ```
 MasteryScore = min(100, round(
-  StudyTimeScore   * 0.25 +   -- 学习时长 (25%)
-  QAScore          * 0.20 +   -- 问答互动 (20%)
-  QuizScore        * 0.40 +   -- 练习正确率 (40%)
-  FrequencyScore   * 0.15     -- 学习频率 (15%)
+  StudyTimeScore   × 0.25 +   -- 学习时长 (25%)
+  QAScore          × 0.20 +   -- 问答互动 (20%)
+  QuizScore        × 0.40 +   -- 练习正确率 (40%)
+  FrequencyScore   × 0.15     -- 学习频率 (15%)
 ))
 ```
 
-### 各维度计算方式
+| 维度 | 计算方式 |
+|------|----------|
+| 学习时长 | `studyMinutes / targetMinutes × 100`，上限 100 |
+| 问答互动 | `questionsAsked × 20 + correctAnswers × 10`，上限 100 |
+| 练习正确率 | 加权正确率（见下表），上限 100 |
+| 学习频率 | `consecutiveDays × 14.3`，7 天连续 = 100 |
 
-| 维度 | 计算方式 | 权重 |
-|------|----------|------|
-| **学习时长** | `studyMinutes / targetMinutes * 100` | 25% |
-| **问答互动** | `questionsAsked * 20 + correctAnswers * 10` | 20% |
-| **练习正确率** | 加权正确率，首次权重1.0，第二次0.7，第三次0.5，之后0.3 | 40% |
-| **学习频率** | `consecutiveDays * 14.3`，7天连续学习=100分 | 15% |
-
-### 答题权重衰减机制
-
-同一知识点的重复答题，权重逐次递减，避免刷题 inflate 分数：
+### 答题权重衰减
 
 | 答题次数 | 权重 |
 |----------|------|
-| 第1次 | 1.0 |
-| 第2次 | 0.7 |
-| 第3次 | 0.5 |
-| 第4次+ | 0.3 |
+| 第 1 次 | 1.0 |
+| 第 2 次 | 0.7 |
+| 第 3 次 | 0.5 |
+| 第 4 次+ | 0.3 |
 
-## 能力评估系统
+## 能力评估等级
 
-支持 5 级能力评测，根据答题情况动态调整难度：
-
-| 等级 | 难度 | 说明 |
-|------|------|------|
-| L1 | 基础 | 基本概念理解 |
-| L2 | 初级 | 知识点掌握 |
-| L3 | 中级 | 综合应用能力 |
-| L4 | 高级 | 深入理解 |
-| L5 | 专家 | 精通与创新 |
+| 等级 | 说明 |
+|------|------|
+| L1 | 零基础，从最基础概念讲起 |
+| L2 | 入门，简要回顾基础 |
+| L3 | 中级，进阶内容 + 实战 |
+| L4 | 进阶，深入高级主题 |
+| L5 | 高级，专家级内容 |
 
 ## 多计划管理
 
-每个用户可同时管理最多 **7 个学习计划**，支持以下操作：
+- 最多 **7 个** `active` 计划；`completed` 不计入上限
+- 支持 `paused` 暂停与恢复
+- localStorage 键名：`yizhi_learning_state_${userId}`，登出 / 切换用户时自动隔离
 
-### 计划限制规则
+## 交互式答题格式
 
-- **上限**：最多 7 个进行中的 `active` 计划
-- **已完成计划**：标记为 `completed` 的不计入限制
-- **暂停计划**：支持 `paused` 状态，可随时恢复
-- **新建判断**：创建新计划时自动检测，超限则提示先完成现有计划
-
-### 数据隔离机制
-
-用户切换账户时，系统自动完成以下操作：
-
-1. **localStorage 隔离**：学习状态存储在 `yizhi_learning_state_${userId}` 中
-2. **自动切换**：`useAuth` hook 检测到 `user.id` 变化时，自动调用 `switchUser()`
-3. **状态重置**：登出时清除所有学习状态并刷新页面
-4. **独立恢复**：每个用户登录时只加载自己的最近学习计划
-
-### 计划切换
-
-Dashboard 看板展示所有计划列表，点击即可切换当前学习上下文：
-- 当前计划以紫色边框高亮
-- 每个计划卡片显示独立进度条和掌握度
-- 已完成的计划以绿色标识，可回顾但不可编辑进度
-- 暂停的计划以灰色标识，支持恢复
-
-## 交互式答题系统
-
-### AI 题目生成格式
-
-AI 生成学习内容时，练习题使用标准 HTML 注释格式：
+AI 生成内容时，练习题使用 HTML 注释嵌入：
 
 ```markdown
 <!-- quiz
@@ -183,337 +175,234 @@ B: 虚拟 DOM
 C: 依赖注入
 D: 模板引擎
 correct: B
-explanation: React 使用虚拟 DOM 来提高渲染性能。当状态变化时，React 先在虚拟 DOM 上计算差异，然后只更新实际需要变化的节点。
+explanation: React 使用虚拟 DOM 来提高渲染性能。
 -->
 ```
 
-### 前端渲染流程
+前端 `QuizRenderer` 解析并渲染为交互卡片，结果写入 `quiz_results` 并触发掌握度重算。
 
-1. `MarkdownRenderer` 解析 Markdown 内容
-2. `QuizRenderer.extractQuizzes()` 识别 `<!-- quiz ... -->` 注释块
-3. `QuizCard` 组件渲染交互式答题卡片
-4. 用户选择答案 → 即时显示对错 + 解析
-5. 记录到 `quiz_results` 表并触发掌握度重算
+## 智能配图管线
 
-## 学习时长追踪
+内容保存（`content.saveContent`）后，后台异步执行 `runIllustrationJob`：
 
-系统自动追踪每个学习会话的学习时长：
+```
+Markdown 全文
+  → 解析 <!-- illustration --> 标记（优先）或按 H2 分段
+  → DeepSeek 提取 sceneBrief（主体、场景、uniqueIdentifiers）
+  → 分流：wanxiang（场景插画）/ mermaid（概念流程图）
+  → 万相 2K + thinking_mode / mermaid.ink 渲染 PNG
+  → 可选 qwen-vl 视觉校验 + 一次 retry
+  → 按 anchorText 插入 markdown
+  → 存储于 data/uploads/content-images/ 或 content-diagrams/
+```
 
-- **Session 记录**：记录在 `study_sessions` 表
-- **掌握度计算**：时长数据参与四维掌握度算法
-- **统计展示**：Dashboard 和 Mastery 页面展示学习时长统计
+- 每日 **2–3 张**，不配置 `DASHSCOPE_API_KEY` 时跳过万相，Mermaid 图表仍可生成
+- Study 页「重新配图」调用 `content.generateIllustrations`（`force: true`）
 
 ## 快速开始
 
 ### 环境要求
 
 - Node.js 20+
-- MySQL 8.0+ / TiDB
-- DeepSeek API Key
-- AWS S3 账户（可选，用于文件存储）
+- MySQL 8.0+
+- DeepSeek API Key（必填）
 
-### 安装依赖
+### 安装与配置
 
 ```bash
 npm install
+cp .env.example .env   # Windows: copy .env.example .env
+# 编辑 .env，至少填写 DATABASE_URL、DEEPSEEK_API_KEY、JWT_SECRET
+npm run db:push        # 开发推荐；或 db:generate + db:migrate
+npm run dev            # http://localhost:3000
 ```
 
-### 配置环境变量
+> **注意**：开发必须运行 `npm run dev`，访问 **http://localhost:3000**（非 5173）。Vite 与 Hono API 在同一进程。
 
-创建 `.env` 文件：
+### 开发模式登录
 
-```bash
-# 数据库配置
-DATABASE_URL=mysql://user:password@host:port/database
+手机号验证码在开发环境固定为 **123456**（见 `api/phone-auth-router.ts`）。
 
-# AI API
-DEEPSEEK_API_KEY=your_deepseek_api_key
+### 环境变量
 
-# 认证
-JWT_SECRET=your_jwt_secret
+| 分组 | 必填 | 说明 |
+|------|------|------|
+| `DATABASE_URL` | 是 | MySQL 连接串 |
+| `DEEPSEEK_API_KEY` | 是 | 大纲、内容、评估、问答、配图 prompt |
+| `DEEPSEEK_API_BASE` / `DEEPSEEK_MODEL` | 否 | 默认 `https://api.deepseek.com`、`deepseek-chat` |
+| `JWT_SECRET` | 是 | JWT 签名 |
+| `VOLCENGINE_TTS_*` | 否 | 未配置则 TTS 不可用 |
+| `DASHSCOPE_API_KEY` | 否 | 未配置则跳过万相插画 |
+| `DASHSCOPE_IMAGE_MODEL` | 否 | 默认 `wan2.7-image` |
+| `DASHSCOPE_IMAGE_SIZE` | 否 | 默认 `2K` |
+| `DASHSCOPE_VISION_MODEL` | 否 | 配图校验，默认 `qwen-vl-plus` |
+| `IMAGE_VALIDATION_ENABLED` | 否 | 默认 `true`，设 `false` 可降 API 成本 |
+| `MERMAID_RENDER_TIMEOUT_MS` | 否 | Mermaid 渲染超时，默认 30000 |
 
-# AWS S3（可选）
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_S3_BUCKET=your_bucket_name
-AWS_REGION=your_region
-```
+完整示例见 [`.env.example`](.env.example)。
 
-### 数据库初始化
-
-```bash
-# 生成迁移文件
-npm run db:generate
-
-# 执行迁移
-npm run db:migrate
-
-# 或者一键推送 schema（开发阶段推荐）
-npm run db:push
-```
-
-### 开发模式
-
-```bash
-npm run dev
-```
-
-访问 http://localhost:5173
-
-### 代码检查与格式化
-
-```bash
-# TypeScript 类型检查
-npm run check
-
-# ESLint 代码规范检查
-npm run lint
-
-# Prettier 代码格式化
-npm run format
-
-# 单元测试
-npm run test
-```
-
-### 生产构建
+### 生产部署
 
 ```bash
 npm run build
-npm start
+npm start              # NODE_ENV=production，默认 PORT=3000
+```
+
+### 代码检查
+
+```bash
+npm run check          # TypeScript
+npm run lint           # ESLint
+npm run format         # Prettier
+npm run test           # Vitest（api/**/*.test.ts）
+```
+
+## 页面路由
+
+| 路径 | 页面 | 说明 |
+|------|------|------|
+| `/login` | Login | 手机号登录 |
+| `/onboarding` | Onboarding | 新建计划（类型判定 + 评估 + 大纲） |
+| `/` | Dashboard | 计划看板与进度 |
+| `/study` | Study | 每日学习、问答、配图、TTS |
+| `/mastery` | Mastery | 掌握度分析 |
+| `/history` | History | 问答与答题历史 |
+| `/settings` | Settings | 用户设置与通知 |
+
+## 核心流程
+
+### 1. 计划创建
+
+```
+用户输入学习目标（Onboarding）
+  → detectLearningType（DeepSeek）
+  → 能力评估 quiz
+  → generateOutline → saveOutline
+  → 跳转 Dashboard
+```
+
+### 2. 每日内容生成
+
+```
+Study 页点击生成
+  → POST /api/ai/stream（DeepSeek SSE，typeEngine 系统 prompt）
+  → 流式展示 Markdown
+  → saveContent 写入 learning_contents
+  → 后台 runIllustrationJob 生成配图
+  → 前端轮询 getContent 刷新
+```
+
+### 3. 掌握度更新
+
+```
+学习 / 答题 / 提问
+  → 写入 study_sessions / quiz_results / qa_history
+  → computeMasteryScore 重算
+  → 更新 mastery_scores
+  → Dashboard / Mastery 展示
 ```
 
 ## 项目结构
 
 ```
 .
-├── api/                           # 后端 API
-│   ├── boot.ts                   # 应用启动入口
-│   ├── router.ts                 # tRPC 路由注册
-│   ├── user-router.ts            # 用户管理（注册、登录、信息）
-│   ├── phone-auth-router.ts      # 手机号认证（验证码发送、验证）
-│   ├── learning-router.ts        # 学习计划管理
-│   ├── content-router.ts         # 学习内容生成和查询
-│   ├── qa-router.ts              # 问答历史管理
-│   ├── mastery-router.ts         # 掌握度评分和算法
-│   ├── assessment-router.ts      # 能力评估
-│   ├── middleware.ts             # 认证和错误处理中间件
-│   └── utils/                    # 工具函数
-│
-├── db/
-│   ├── schema.ts                 # 数据库完整 schema
-│   └── index.ts                  # 数据库连接配置
-│
-├── src/
-│   ├── pages/                    # 页面组件
-│   │   ├── Dashboard.tsx         # 学习看板（计划列表、进度）
-│   │   ├── Study.tsx             # 学习页面（学习内容展示、计时）
-│   │   ├── Mastery.tsx           # 掌握度分析页面
-│   │   ├── Assessment.tsx        # 能力评估页面
-│   │   ├── Settings.tsx          # 用户设置
-│   │   ├── Login.tsx             # 登录页面
-│   │   └── NotFound.tsx          # 404 页面
-│   │
-│   ├── components/
-│   │   ├── quiz/                 # 答题模块
-│   │   │   ├── QuizRenderer.tsx  # 题目解析和渲染
-│   │   │   ├── QuizCard.tsx      # 题目卡片组件
-│   │   │   └── QuizStats.tsx     # 答题统计
-│   │   │
-│   │   ├── markdown/             # Markdown 相关
-│   │   │   ├── MarkdownRenderer.tsx  # Markdown 渲染
-│   │   │   └── CodeBlock.tsx     # 代码块组件
-│   │   │
-│   │   ├── layout/               # 布局组件
-│   │   │   ├── AppLayout.tsx     # 主布局
-│   │   │   ├── Sidebar.tsx       # 侧边栏导航
-│   │   │   └── TopBar.tsx        # 顶部栏
-│   │   │
-│   │   ├── charts/               # 图表组件
-│   │   │   ├── MasteryChart.tsx  # 掌握度可视化
-│   │   │   └── ProgressChart.tsx # 进度图表
-│   │   │
-│   │   └── common/               # 通用组件
-│   │       ├── Loading.tsx       # 加载动画
-│   │       ├── Modal.tsx         # 弹窗
-│   │       └── Toast.tsx         # 提示
-│   │
+├── api/
+│   ├── boot.ts                 # Hono 入口：tRPC、/api/ai/stream、TTS、/uploads
+│   ├── router.ts               # tRPC 路由聚合
+│   ├── *-router.ts             # 业务路由（learning、content、qa、mastery…）
 │   ├── services/
-│   │   ├── aiService.ts          # DeepSeek API 封装
-│   │   ├── trpcClient.ts         # tRPC 客户端配置
-│   │   └── api.ts                # 其他 API 调用
-│   │
-│   ├── stores/
-│   │   ├── useLearningStore.ts   # 学习状态管理
-│   │   ├── useAuthStore.ts       # 认证状态管理
-│   │   └── useUIStore.ts         # UI 状态管理
-│   │
-│   ├── hooks/
-│   │   ├── useAuth.ts            # 认证 hook
-│   │   ├── useStudyTimer.ts      # 学习计时 hook
-│   │   ├── useMastery.ts         # 掌握度 hook
-│   │   └── useQuery.ts           # React Query hook
-│   │
-│   ├── utils/
-│   │   ├── formatters.ts         # 数据格式化
-│   │   ├── validators.ts         # 数据验证
-│   │   └── constants.ts          # 常量定义
-│   │
-│   ├── types/
-│   │   └── index.ts              # TypeScript 类型定义
-│   │
-│   ├── App.tsx                   # 应用主组件
-│   └── main.tsx                  # 应用入口
-│
-├── contracts/                    # 前后端共享类型定义
-│   └── index.ts
-│
-├── .env                         # 环境变量配置
-├── package.json                 # 项目依赖
-├── tsconfig.json               # TypeScript 配置
-├── vite.config.ts              # Vite 配置
-├── tailwind.config.ts          # Tailwind CSS 配置
-└── README.md                   # 项目说明文档
+│   │   ├── aiService.ts        # DeepSeek 调用（大纲、流式内容、评估）
+│   │   ├── contentImageService.ts  # 配图提取与生成
+│   │   ├── qaService.ts        # 问答上下文与流式保存
+│   │   └── masteryService.ts   # 掌握度算法
+│   └── lib/
+│       ├── deepseek.ts         # DeepSeek HTTP 客户端
+│       ├── wanxiang-image.ts   # 万相文生图
+│       ├── mermaid-render.ts   # Mermaid → PNG
+│       ├── volcengine-tts.ts   # TTS
+│       └── env.ts              # 环境变量
+├── shared/
+│   ├── typeEngine.ts           # 7 类学习引擎与 prompt
+│   └── markdownSections.ts     # H2 章节切分
+├── db/
+│   ├── schema.ts               # Drizzle schema
+│   └── migrations/
+├── src/
+│   ├── pages/                  # Login, Onboarding, Dashboard, Study, …
+│   ├── components/
+│   │   ├── reading/            # 阅读模式（SectionCard、TOC、Toolbar）
+│   │   ├── markdown/           # MarkdownRenderer、MermaidDiagram
+│   │   ├── quiz/               # QuizRenderer、QuizCard
+│   │   ├── layout/             # AppLayout
+│   │   └── ui/                 # shadcn/ui 组件
+│   ├── services/
+│   │   ├── aiService.ts        # 客户端 fetch 封装（stream、tRPC 代理）
+│   │   └── ttsService.ts
+│   ├── stores/useLearningStore.ts
+│   └── providers/trpc.tsx
+├── data/uploads/               # 配图静态资源（gitignore）
+├── contracts/
+├── .env.example
+├── vite.config.ts
+└── README.md
 ```
 
 ## 响应式设计
 
-系统支持全端适配：
-
-### 桌面端（≥ 768px）
-- 左侧固定侧边栏导航
-- 主内容区自适应宽度
-- 完整功能展示
-
-### 移动端（< 768px）
-- 顶部紧凑标题栏（高度 40px）
-- 底部 Tab Bar ���航（高度 48px）
-- Stat 卡片 2x2 网格布局
-- 弹窗底部增加 padding 防止被 Tab Bar 遮挡
-- 单列布局优化
-
-## 核心流程
-
-### 1. 学习计划生成流程
-
-```
-用户输入学习目标 
-  ↓
-调用 DeepSeek API 生成学习大纲
-  ↓
-保存到 learning_outline 表
-  ↓
-生成 N 天的课程结构
-  ↓
-用户开始学习
-```
-
-### 2. 学习内容生成流程
-
-```
-用户点击学习某一天
-  ↓
-检查 learning_contents 是否已缓存
-  ↓
-若未缓存，调用 DeepSeek 流式生成内容
-  ↓
-实时显示 Markdown 内容
-  ↓
-提取 quiz 并渲染答题卡片
-  ↓
-保存内容和状态
-```
-
-### 3. 掌握度更新流程
-
-```
-用户完成学习、做题、提问等操作
-  ↓
-记录到相应数据表（quiz_results, qa_history, study_sessions）
-  ↓
-触发掌握度重算
-  ↓
-四维算法实时计算分数
-  ↓
-更新 mastery_scores 表
-  ↓
-Dashboard 和 Mastery 页面实时展示
-```
-
-### 4. 多计划切换流程
-
-```
-用户切换学习计划
-  ↓
-自动保存当前计划状态到 localStorage
-  ↓
-加载新计划的学习数据
-  ↓
-恢复到上次学习位置
-  ↓
-更新 UI 和学习进度
-```
-
-## 性能优化
-
-- **前端缓存**：使用 React Query 缓存 API 响应，减少重复请求
-- **流式响应**：DeepSeek 内容生成采用流式传输，优化用户体验
-- **数据库索引**：关键字段添加索引加快查询
-- **增量更新**：掌握度算法采用增量更新，避免全量重算
-- **图片优化**：头像等图片使用 AWS S3 存储和 CDN 分发
+- **桌面端（≥ 768px）**：Study 页左侧大纲 + 主内容区 + 可选 QA 面板
+- **移动端（< 768px）**：底部大纲抽屉、紧凑顶栏、Tab 导航
 
 ## 安全特性
 
-- **JWT 认证**：使用 JWT token 进行身份验证
-- **手机号验证**：发送验证码到手机确认身份
-- **SQL 防注入**：使用 Drizzle ORM 防止 SQL 注入
-- **CORS 配置**：严格的跨域资源共享策略
-- **环境变量隔离**：敏感信息通过环境变量管理
+- JWT Bearer 认证（`/api/ai/stream` 等需登录）
+- Drizzle ORM 参数化查询
+- 敏感配置通过 `.env` 管理，勿提交密钥
+
+## 常见问题
+
+### Q: 生成内容报「Failed to fetch」或「无法连接服务器」？
+
+确认已在项目目录运行 `npm run dev`，并访问 **http://localhost:3000**。若 dev 未启动，浏览器无法连接 `/api/ai/stream`。
+
+### Q: 配图不显示？
+
+1. 检查 `.env` 中 `DASHSCOPE_API_KEY` 是否配置（万相插画需要）
+2. 保存内容后等待后台生成（约 1–3 分钟），或点击 Study 页「重新配图」
+3. 抽象/操作类内容可能使用 Mermaid 图表，存于 `/uploads/content-diagrams/`
+
+### Q: 如何降低配图 API 成本？
+
+在 `.env` 设置 `IMAGE_VALIDATION_ENABLED=false`，关闭 qwen-vl 视觉校验；或使用 `DASHSCOPE_IMAGE_MODEL=wan2.7-image` 标准版。
+
+### Q: TTS 不可用？
+
+配置 `VOLCENGINE_TTS_API_KEY` 等变量，见 `.env.example`。
+
+### Q: 如何更换 LLM？
+
+修改服务端 [`api/lib/deepseek.ts`](api/lib/deepseek.ts) 与 [`api/services/aiService.ts`](api/services/aiService.ts)。客户端 [`src/services/aiService.ts`](src/services/aiService.ts) 仅负责 fetch 转发。
+
+### Q: 如何重置本地学习状态？
+
+删除 localStorage 中 `yizhi_learning_state_${userId}` 与 `yizhi_token`（需重新登录）。
+
+## 开发规范
+
+- 遵循 ESLint / Prettier 配置
+- 提交前运行 `npm run check`
+- TypeScript 严格模式，避免 `any`
 
 ## 贡献指南
 
 1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 开发规范
-
-- **代码风格**：遵循 ESLint 和 Prettier 配置
-- **提交信息**：使用有意义的 commit 信息
-- **类型安全**：所有代码必须通过 TypeScript 类型检查
-- **测试覆盖**：重要功能需要单元测试
-
-## 常见问题
-
-### Q: 如何重置用户数据？
-A: 删除 localStorage 中 `yizhi_learning_state_${userId}` 的数据，或调用 API 重置。
-
-### Q: 支持离线模式吗？
-A: 暂不支持，但缓存的内容可在网络恢复后同步。
-
-### Q: 如何集成自己的 LLM？
-A: 修改 `src/services/aiService.ts` 中的 DeepSeek 调用，替换为你的 LLM 接口。
-
-### Q: 数据库可以使用其他类型吗？
-A: 可以，修改 `db/schema.ts` 中的 Drizzle 配置即可。
+2. 创建特性分支（`git checkout -b feature/xxx`）
+3. 提交更改并推送
+4. 开启 Pull Request
 
 ## 许可证
 
 MIT
 
-## 联系方式
-
-有问题或建议？欢迎提交 Issue 或 PR。
-
 ---
 
-**最后更新**: 2026 年 6 月
-**最后更新**: 2026 年 6 月
-
-### Mermaid 图表支持
-- 网络关联型内容现在支持自动渲染因果网络图
-- 使用标准的mermaid语法，在代码块中使用```mermaid标记
-- 支持flowchart、graph等多种图表类型
-- 自动适配暗色主题，与整体UI风格一致
+**最后更新**：2026 年 6 月

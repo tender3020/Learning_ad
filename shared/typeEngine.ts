@@ -105,7 +105,14 @@ export function getTypeSystemPrompt(type: LearningType, skillLevel: string): str
 - 行内公式（短公式）：用 $...$ 包裹，如 $E = mc^2$
 - 块级公式（独立显示的公式）：用 $$...$$ 包裹，如 $$\\text{企业价值} = \\sum_{t=1}^{n} \\frac{FCF_t}{(1+r)^t}$$
 - 禁止用 \\[...\\] 或 \\(...\\) 或普通方括号 [ ... ] 包裹公式
-- 禁止在公式外额外加普通方括号 [ ]`;
+- 禁止在公式外额外加普通方括号 [ ]
+
+【配图意图标记 - 必须遵守】
+在 2-3 个最适合配图的章节末尾，各插入一行 HTML 注释（用户不可见，必须原样保留）：
+<!-- illustration: {"anchor":"正文中的完整句子20-40字","intent":"该段核心画面一句话","medium":"wanxiang或mermaid"} -->
+- anchor 必须是该章节正文中的完整句子，与 Markdown 完全一致
+- medium 为 wanxiang（场景插画）或 mermaid（概念/流程图）；抽象推导、代码流程用 mermaid，生活场景/对话/操作画面用 wanxiang
+- 每个关键章节最多 1 条，全文共 2-3 条`;
 
   const prompts: Record<LearningType, string> = {
     abstract_logic: `你是一位优秀的数学/物理导师。学习者水平：${skillLevel}（${levelHint}）。
@@ -510,54 +517,93 @@ function getLevelHint(level: string): string {
   return hints[level] || hints.l3;
 }
 
-/** 各学习类型配图提取指引（供 DeepSeek 从正文截取配图场景） */
-export function getImagePromptExtractionPrompt(
+export type VisualMedium = "wanxiang" | "mermaid";
+
+/** 各学习类型优先配图的章节标题关键词 */
+export function getImageSectionKeywords(type: LearningType): string[] {
+  const keywords: Record<LearningType, string[]> = {
+    abstract_logic: ["核心概念", "直观理解", "推导过程", "生活化"],
+    operation_logic: ["今日概念", "代码示例", "运行结果", "动手练习"],
+    language: ["今日场景", "场景对话", "核心句型", "词汇"],
+    network_assoc: ["今日叙事", "关键要素", "影响与意义", "因果"],
+    model_apply: ["今日模型", "手算案例", "现实套用", "商业"],
+    perception: ["今日目标", "示范与拆解", "分步操作", "作品"],
+    practical: ["准备工作", "分步操作", "安全须知", "关键技巧"],
+  };
+  return keywords[type] ?? keywords.abstract_logic;
+}
+
+/** 各类型默认配图策略：diagram 优先章节 vs scene 优先章节 */
+export function getImageMediumForSection(
+  type: LearningType,
+  sectionTitle: string | null,
+): VisualMedium {
+  const title = sectionTitle ?? "";
+  const diagramKeywords: Record<LearningType, string[]> = {
+    abstract_logic: ["推导", "核心概念", "直观理解"],
+    operation_logic: ["代码", "概念", "语法", "流程"],
+    language: [],
+    network_assoc: [],
+    model_apply: ["模型", "关系"],
+    perception: [],
+    practical: [],
+  };
+  const keys = diagramKeywords[type] ?? [];
+  if (keys.some((k) => title.includes(k))) return "mermaid";
+  return "wanxiang";
+}
+
+const sectionGuides: Record<LearningType, string> = {
+  abstract_logic: `优先章节：「今日核心概念」「推导过程」「直观理解验证」
+- 推导/概念关系 → visualMedium: mermaid（flowchart 或 graph，节点用正文术语）
+- 生活比喻场景 → visualMedium: wanxiang`,
+  operation_logic: `优先章节：「今日概念」「完整代码示例」「运行结果」
+- 代码执行流程/模块调用 → visualMedium: mermaid（flowchart 或 sequenceDiagram）
+- 终端/编辑器界面场景 → visualMedium: wanxiang`,
+  language: `优先章节：「今日场景」「场景对话」「核心句型」
+- 全部使用 visualMedium: wanxiang`,
+  network_assoc: `优先章节：「今日叙事」「关键要素卡」「影响与意义」
+- 全部使用 visualMedium: wanxiang（历史场景，不要流程图）`,
+  model_apply: `优先章节：「今日模型」「手算案例」「现实套用」
+- 模型关系 → visualMedium: mermaid
+- 商业/生活案例 → visualMedium: wanxiang`,
+  perception: `优先章节：「今日目标」「示范与拆解」「分步操作」
+- 全部使用 visualMedium: wanxiang`,
+  practical: `优先章节：「准备工作」「分步操作」「安全须知」
+- 全部使用 visualMedium: wanxiang`,
+};
+
+/** 分段结构化场景摘要提取（Stage A） */
+export function getImageSceneBriefExtractionPrompt(
   type: LearningType,
   dayTitle: string,
 ): string {
-  const sectionGuides: Record<LearningType, string> = {
-    abstract_logic: `从正文选取 2-3 个最适合配图的部分：
-1. 「今日核心概念」的生活化比喻场景
-2. 「直观理解验证」中的几何/数值直觉画面
-3. 「推导过程」中关键一步的可视化图解`,
-    operation_logic: `从正文选取 2-3 个最适合配图的部分：
-1. 「今日概念」对应的编程/技术概念示意图
-2. 「完整代码示例」或「运行结果」对应的程序界面/终端输出场景
-3. 「动手练习」中的实操场景`,
-    language: `从正文选取 2-3 个最适合配图的部分：
-1. 「今日场景」的真实生活情境
-2. 「场景对话」中的关键对话瞬间
-3. 「核心句型」或「词汇」的应用场景`,
-    network_assoc: `从正文选取 2-3 个最适合配图的部分：
-1. 「今日叙事」中最具画面感的历史/故事瞬间
-2. 「关键要素卡」中的核心人物或地点
-3. 「影响与意义」或因果链条中的关键转折场景（画场景，不要流程图）`,
-    model_apply: `从正文选取 2-3 个最适合配图的部分：
-1. 「今日模型」的概念关系示意图
-2. 「手算案例」中的商业/经济场景
-3. 「现实套用」中的新闻或生活案例画面`,
-    perception: `从正文选取 2-3 个最适合配图的部分：
-1. 「今日目标」完成后的作品效果示意
-2. 「示范与拆解」中的范例作品风格
-3. 「分步操作」中关键步骤的动手过程`,
-    practical: `从正文选取 2-3 个最适合配图的部分：
-1. 「准备工作」中的工具与材料摆放
-2. 「分步操作」中最关键的一步操作画面
-3. 「安全须知」或「关键技巧」中的规范操作场景`,
-  };
-
   return `你是教育内容配图策划。学习类型：${TYPE_NAMES[type]}。今日主题：${dayTitle}
 
 ${sectionGuides[type]}
 
-根据下方 Markdown 学习内容，为每个选取部分生成一条万相文生图提示词。
+用户将提供若干 Markdown 章节片段。为每个章节输出一条结构化配图摘要。
 
 要求：
-- 输出 2-3 条（优先 3 条，内容不足时可 2 条）
-- anchorText 为正文中的**原文片段**（15-35 个汉字），必须与下方 Markdown 完全一致，用于定位插图插入位置；选取该图配图依据的那一段话中的关键句（不要标题，要是正文句子）
-- prompt 为中文画面描述，50-120字，写清主体、环境、光线、风格，且与 anchorText 所描述内容一致
-- 风格统一：清晰教育插画，柔和配色，无文字、无水印、无 logo
-- 画面比例 3:2 横向构图
+- 输出 2-3 条（优先 3 条）
+- anchorText：必须是该章节正文中的**完整句子**（20-40 个汉字），与章节 Markdown 完全一致，不要标题
+- uniqueIdentifiers：从该章节正文摘取 2-4 个专有名词/具体动作/工具/人名/地点，禁止只用「${dayTitle}」
+- visualMedium 为 wanxiang 或 mermaid（见上方类型指引）
+- wanxiang 时填写 subjects/setting/action/style/avoid；mermaid 时填写 mermaidCode
+- mermaidCode 使用 flowchart TD、graph LR 或 sequenceDiagram，节点标签用正文中的具体术语（中文），至少 4 个节点，不要 markdown 代码块包裹
+- 禁止空泛描述如「某某主题的教育插画」
+- style 统一：清晰教育风格，柔和配色，3:2 横向构图
+- avoid 必须包含「画面中出现任何文字、水印、logo」（wanxiang 时）
 - 只返回 JSON 数组，不要 markdown 代码块：
-[{"anchorText":"正文原文片段","prompt":"画面描述"}]`;
+[{"sectionTitle":"章节标题","anchorText":"正文完整句子","visualMedium":"wanxiang","sceneType":"dialogue","subjects":["..."],"setting":"...","action":"...","uniqueIdentifiers":["..."],"style":"...","avoid":["..."]}]
+或
+[{"sectionTitle":"章节标题","anchorText":"正文完整句子","visualMedium":"mermaid","uniqueIdentifiers":["..."],"mermaidCode":"flowchart TD\\n  A[概念A] --> B[概念B]"}]`;
+}
+
+/** @deprecated 保留兼容，请使用 getImageSceneBriefExtractionPrompt */
+export function getImagePromptExtractionPrompt(
+  type: LearningType,
+  dayTitle: string,
+): string {
+  return getImageSceneBriefExtractionPrompt(type, dayTitle);
 }

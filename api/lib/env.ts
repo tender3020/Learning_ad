@@ -29,4 +29,8 @@ export const env = {
   dashscopeApiBase:
     process.env.DASHSCOPE_API_BASE ?? "https://dashscope.aliyuncs.com/api/v1",
   dashscopeImageModel: process.env.DASHSCOPE_IMAGE_MODEL ?? "wan2.7-image",
+  dashscopeImageSize: process.env.DASHSCOPE_IMAGE_SIZE ?? "2K",
+  dashscopeVisionModel: process.env.DASHSCOPE_VISION_MODEL ?? "qwen-vl-plus",
+  imageValidationEnabled: process.env.IMAGE_VALIDATION_ENABLED !== "false",
+  mermaidRenderTimeoutMs: parseInt(process.env.MERMAID_RENDER_TIMEOUT_MS ?? "30000", 10),
 };
