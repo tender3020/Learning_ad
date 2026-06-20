@@ -527,7 +527,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
         <div className="flex-1 overflow-hidden flex min-h-0">
           <div
             ref={contentScrollRef}
-            className={`flex-1 overflow-y-auto p-3 md:p-6 ${showQA ? "" : "w-full"}`}
+            className={`flex-1 overflow-y-auto p-0 md:p-6 ${showQA ? "" : "w-full"}`}
           >
             {!content && !isLoading ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col items-center justify-center px-4">

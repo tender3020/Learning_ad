@@ -884,3 +884,52 @@
   color: var(--reading-text-muted);
 }
 
+/* ============ Mobile reading: full-bleed + flat sections ============ */
+@media (max-width: 767px) {
+  .reading-layout {
+    max-width: none;
+    margin: 0;
+    gap: 0;
+  }
+
+  .reading-shell {
+    max-width: none;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .reading-shell__inner {
+    padding: 0.75rem 1rem 1.25rem;
+  }
+
+  .reading-toolbar {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .section-card {
+    border: none;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .section-card__header {
+    padding: 0.5rem 0 0;
+    border-top: 2px solid var(--section-accent);
+  }
+
+  .section-card__body {
+    padding: 0.5rem 0 1rem;
+  }
+
+  .reading-markdown {
+    gap: 0.5rem;
+  }
+
+  .markdown-body .content-illustration {
+    width: 100%;
+    max-width: none;
+  }
+}
+
