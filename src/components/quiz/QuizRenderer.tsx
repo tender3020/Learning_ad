@@ -199,14 +199,14 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
     if (selected === key && key !== quiz.correct) {
       return "border-[#FF3B30] bg-[rgba(255,59,48,0.1)]";
     }
-    return "border-[rgba(255,255,255,0.05)] opacity-40";
+    return "border-[rgba(255,255,255,0.04)] bg-[rgba(255,255,255,0.02)]";
   };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="my-5 rounded-2xl border border-[rgba(110,86,207,0.2)] overflow-hidden"
+      className="reading-quiz my-5 rounded-2xl border border-[rgba(110,86,207,0.2)] overflow-hidden"
       style={{ background: "linear-gradient(180deg, rgba(110,86,207,0.08) 0%, rgba(110,86,207,0.02) 100%)" }}
     >
       {/* 头部 */}
@@ -239,7 +239,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
                     ? "bg-[#FF3B30] text-white"
                     : selected === key
                       ? "bg-[#6E56CF] text-white"
-                      : "bg-[rgba(255,255,255,0.05)]"
+                      : "bg-[rgba(255,255,255,0.05)] text-[var(--text-primary)]"
               }`}
             >
               {submitted && key === quiz.correct ? (
@@ -263,7 +263,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
           <button
             onClick={handleSubmit}
             disabled={!selected}
-            className="w-full py-2.5 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl text-sm font-medium transition-colors"
+            className="w-full py-2.5 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[var(--text-secondary)] text-white rounded-xl text-sm font-medium transition-colors"
           >
             提交答案
           </button>

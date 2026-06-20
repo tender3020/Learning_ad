@@ -5,9 +5,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useLearningStore } from "@/stores/useLearningStore";
 import { aiService } from "@/services/aiService";
 import { useTtsPlayer } from "@/hooks/useTtsPlayer";
+import { useReadingPrefs } from "@/hooks/useReadingPrefs";
 import TtsButton from "@/components/TtsButton";
 import WireframeSphere from "@/components/3d/WireframeSphere";
 import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
+import ReadingMarkdown, { getReadingTocItems } from "@/components/reading/ReadingMarkdown";
+import ReadingShell from "@/components/reading/ReadingShell";
+import ReadingToolbar from "@/components/reading/ReadingToolbar";
+import ReadingToc from "@/components/reading/ReadingToc";
 import {
   Send,
   Loader2,
@@ -35,9 +40,27 @@ export default function Study() {
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [error, setError] = useState("");
   const qaEndRef = useRef<HTMLDivElement>(null);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
   const studyMinutesRef = useRef(0); // 学习时长追踪（分钟）
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const readingSessionStartRef = useRef<number | null>(null);
   const tts = useTtsPlayer();
+  const {
+    prefs: readingPrefs,
+    cycleMode,
+    increaseFontSize,
+    decreaseFontSize,
+    toggleLineHeight,
+    toggleFocusMode,
+  } = useReadingPrefs();
+
+  const [readProgress, setReadProgress] = useState(0);
+  const [showReadingToc, setShowReadingToc] = useState(false);
+  const [activeTocId, setActiveTocId] = useState<string | undefined>();
+  const [showBreakReminder, setShowBreakReminder] = useState(false);
+  const [breakDismissed, setBreakDismissed] = useState(false);
+
+  const tocItems = content ? getReadingTocItems(content) : [];
 
   const { user } = useAuth();
   const { data: plans, isLoading: plansLoading } = trpc.learning.getPlans.useQuery();
@@ -287,6 +310,70 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
 
   useEffect(() => { qaEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [qaMessages, isAiTyping]);
 
+  const handleContentScroll = useCallback(() => {
+    const el = contentScrollRef.current;
+    if (!el) return;
+    const max = el.scrollHeight - el.clientHeight;
+    setReadProgress(max > 0 ? Math.min(100, (el.scrollTop / max) * 100) : 0);
+
+    if (tocItems.length > 0) {
+      const scrollTop = el.scrollTop + 120;
+      let current: string | undefined;
+      for (const item of tocItems) {
+        const section = document.getElementById(item.id);
+        if (section && section.offsetTop <= scrollTop) {
+          current = item.id;
+        }
+      }
+      setActiveTocId(current);
+    }
+  }, [tocItems]);
+
+  useEffect(() => {
+    const el = contentScrollRef.current;
+    if (!el) return;
+    handleContentScroll();
+    el.addEventListener("scroll", handleContentScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleContentScroll);
+  }, [content, handleContentScroll]);
+
+  const scrollToSection = useCallback((id: string) => {
+    const el = contentScrollRef.current;
+    const section = document.getElementById(id);
+    if (!el || !section) return;
+    const top = section.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 12;
+    el.scrollTo({ top, behavior: "smooth" });
+    setActiveTocId(id);
+    setShowReadingToc(false);
+  }, []);
+
+  // 连续阅读约 30 分钟后提示休息
+  useEffect(() => {
+    if (!content?.trim() || isStreaming) {
+      readingSessionStartRef.current = null;
+      return;
+    }
+    if (readingSessionStartRef.current === null) {
+      readingSessionStartRef.current = Date.now();
+      setBreakDismissed(false);
+      setShowBreakReminder(false);
+    }
+    const timer = setInterval(() => {
+      const start = readingSessionStartRef.current;
+      if (!start || breakDismissed) return;
+      if (Date.now() - start >= 30 * 60 * 1000) {
+        setShowBreakReminder(true);
+      }
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [content, isStreaming, store.currentDay, breakDismissed]);
+
+  useEffect(() => {
+    readingSessionStartRef.current = null;
+    setShowBreakReminder(false);
+    setBreakDismissed(false);
+  }, [store.currentDay]);
+
   const goToDay = (day: number) => {
     if (day >= 1 && day <= store.totalDays) {
       tts.stop();
@@ -316,11 +403,11 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
   }
 
   return (
-    <div className="h-full flex relative">
-      <WireframeSphere opacity={0.08} />
+    <div className={`h-full flex relative ${readingPrefs.focusMode ? "study-focus-mode" : ""}`}>
+      <WireframeSphere opacity={readingPrefs.focusMode ? 0 : 0.08} />
 
       {/* ===== 桌面端侧边大纲 (md 及以上) ===== */}
-      <div className="hidden md:flex w-60 lg:w-64 h-full liquid-glass border-r border-[rgba(255,255,255,0.05)] z-10 flex-col flex-shrink-0">
+      <div className={`hidden md:flex w-60 lg:w-64 h-full liquid-glass border-r border-[rgba(255,255,255,0.05)] z-10 flex-col flex-shrink-0 ${readingPrefs.focusMode ? "study-sidebar-dim" : ""}`}>
         <div className="p-4 border-b border-[rgba(255,255,255,0.05)]">
           <h2 className="text-sm font-medium text-[#8A8A8E] uppercase tracking-wider">学习大纲</h2>
           <p className="text-xs text-[#8A8A8E] mt-1 truncate">{store.goal || "学习计划"}</p>
@@ -438,7 +525,10 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
 
         {/* 内容主体 */}
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <div className={`flex-1 overflow-y-auto p-3 md:p-6 ${showQA ? "" : "w-full"}`}>
+          <div
+            ref={contentScrollRef}
+            className={`flex-1 overflow-y-auto p-3 md:p-6 ${showQA ? "" : "w-full"}`}
+          >
             {!content && !isLoading ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col items-center justify-center px-4">
                 <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-[rgba(110,86,207,0.1)] flex items-center justify-center mb-4">
@@ -452,27 +542,70 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                 </button>
               </motion.div>
             ) : (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="reading-layout">
                 {isLoading && !content ? (
-                  <div className="flex flex-col items-center justify-center py-20">
+                  <div className="flex flex-col items-center justify-center py-20 w-full">
                     <Loader2 size={28} className="text-[#6E56CF] animate-spin mb-3" />
                     <p className="text-sm text-[#8A8A8E]">AI 正在生成学习内容...</p>
                     <p className="text-xs text-[#8A8A8E] mt-1">首次生成可能需要 10-30 秒</p>
                   </div>
                 ) : (
-                  <MarkdownRenderer content={content} knowledgeName={todayItem?.title || ""} onQuizSubmitted={handleQuizSubmitted} />
-                )}
-                {isStreaming && (
-                  <div className="flex items-center gap-2 mt-4 text-[#6E56CF]">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-pulse" />
-                    <span className="text-xs">AI 正在输出...</span>
-                  </div>
-                )}
-                {content && !isStreaming && (
-                  <div className="mt-4 pt-3 border-t border-[rgba(255,255,255,0.05)]">
-                    <button onClick={() => { setContent(""); handleGenerateContent(); }}
-                      className="text-xs text-[#8A8A8E] hover:text-[#6E56CF] transition-colors">重新生成内容</button>
-                  </div>
+                  <>
+                    <ReadingShell
+                      mode={readingPrefs.mode}
+                      fontSize={readingPrefs.fontSize}
+                      lineHeight={readingPrefs.lineHeight}
+                      progress={readProgress}
+                      breakReminder={showBreakReminder && !breakDismissed}
+                      onDismissBreak={() => {
+                        setBreakDismissed(true);
+                        setShowBreakReminder(false);
+                      }}
+                    >
+                      <ReadingToolbar
+                        mode={readingPrefs.mode}
+                        fontSize={readingPrefs.fontSize}
+                        lineHeight={readingPrefs.lineHeight}
+                        focusMode={readingPrefs.focusMode}
+                        onCycleMode={cycleMode}
+                        onDecreaseFont={decreaseFontSize}
+                        onIncreaseFont={increaseFontSize}
+                        onToggleLineHeight={toggleLineHeight}
+                        onToggleFocus={toggleFocusMode}
+                        onOpenToc={() => setShowReadingToc(true)}
+                        showTocButton={tocItems.length > 0}
+                      />
+                      <ReadingMarkdown
+                        content={content}
+                        knowledgeName={todayItem?.title || ""}
+                        onQuizSubmitted={handleQuizSubmitted}
+                      />
+                      {isStreaming && (
+                        <div className="flex items-center gap-2 mt-4 text-[#6E56CF]">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-pulse" />
+                          <span className="text-xs">AI 正在输出...</span>
+                        </div>
+                      )}
+                      {content && !isStreaming && (
+                        <div className="mt-4 pt-3 border-t border-[var(--reading-card-border)]">
+                          <button
+                            onClick={() => { setContent(""); handleGenerateContent(); }}
+                            className="text-xs text-[var(--reading-text-muted)] hover:text-[#6E56CF] transition-colors"
+                          >
+                            重新生成内容
+                          </button>
+                        </div>
+                      )}
+                    </ReadingShell>
+
+                    <ReadingToc
+                      items={tocItems}
+                      activeId={activeTocId}
+                      onNavigate={scrollToSection}
+                      mobileOpen={showReadingToc}
+                      onMobileClose={() => setShowReadingToc(false)}
+                    />
+                  </>
                 )}
               </motion.div>
             )}
