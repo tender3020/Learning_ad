@@ -1,8 +1,10 @@
-export type { MarkdownSection } from "@shared/markdownSections";
+export type { MarkdownSection, HeadingIdState } from "@shared/markdownSections";
 export {
   slugifyHeading,
   splitMarkdownByH2,
   extractTocFromMarkdown,
+  buildTocFromTextParts,
+  createHeadingIdState,
 } from "@shared/markdownSections";
 
 export type SectionAccent = "default" | "purple" | "orange" | "green" | "blue";

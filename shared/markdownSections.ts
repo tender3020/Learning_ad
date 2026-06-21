@@ -4,6 +4,15 @@ export type MarkdownSection = {
   body: string;
 };
 
+export type HeadingIdState = {
+  usedBaseIds: Set<string>;
+  headingIndex: number;
+};
+
+export function createHeadingIdState(): HeadingIdState {
+  return { usedBaseIds: new Set(), headingIndex: 0 };
+}
+
 export function slugifyHeading(text: string): string {
   const slug = text
     .trim()
@@ -13,7 +22,19 @@ export function slugifyHeading(text: string): string {
   return slug || "section";
 }
 
-export function splitMarkdownByH2(text: string): MarkdownSection[] {
+export function allocateHeadingId(baseId: string, state: HeadingIdState): string {
+  const id = state.usedBaseIds.has(baseId)
+    ? `${baseId}-${state.headingIndex}`
+    : baseId;
+  state.usedBaseIds.add(baseId);
+  state.headingIndex += 1;
+  return id;
+}
+
+export function splitMarkdownByH2(
+  text: string,
+  state: HeadingIdState = createHeadingIdState(),
+): MarkdownSection[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
 
@@ -41,9 +62,7 @@ export function splitMarkdownByH2(text: string): MarkdownSection[] {
       i + 1 < matches.length ? (matches[i + 1].index ?? trimmed.length) : trimmed.length;
     const body = trimmed.slice(start, end).trim();
     const baseId = slugifyHeading(title);
-    const id = sections.some((s) => s.id === baseId)
-      ? `${baseId}-${i}`
-      : baseId;
+    const id = allocateHeadingId(baseId, state);
 
     sections.push({ id, title, body });
   }
@@ -51,19 +70,33 @@ export function splitMarkdownByH2(text: string): MarkdownSection[] {
   return sections;
 }
 
+export function buildTocFromTextParts(
+  textParts: string[],
+): Array<{ id: string; title: string }> {
+  const state = createHeadingIdState();
+  const toc: Array<{ id: string; title: string }> = [];
+
+  for (const text of textParts) {
+    const sections = splitMarkdownByH2(text, state);
+    for (const section of sections) {
+      if (section.title) {
+        toc.push({ id: section.id, title: section.title });
+      }
+    }
+  }
+
+  return toc;
+}
+
 export function extractTocFromMarkdown(markdown: string): Array<{ id: string; title: string }> {
+  const state = createHeadingIdState();
   const headingRegex = /^## (.+)$/gm;
   const items: Array<{ id: string; title: string }> = [];
-  let index = 0;
 
   for (const match of markdown.matchAll(headingRegex)) {
     const title = match[1].trim();
     const baseId = slugifyHeading(title);
-    const id = items.some((item) => item.id === baseId)
-      ? `${baseId}-${index}`
-      : baseId;
-    items.push({ id, title });
-    index += 1;
+    items.push({ id: allocateHeadingId(baseId, state), title });
   }
 
   return items;

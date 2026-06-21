@@ -1,9 +1,10 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
 import { splitContentWithQuizzes, QuizCard } from "@/components/quiz/QuizRenderer";
 import SectionCard from "./SectionCard";
 import {
-  extractTocFromMarkdown,
+  buildTocFromTextParts,
+  createHeadingIdState,
   getSectionAccent,
   splitMarkdownByH2,
 } from "./sectionUtils";
@@ -16,7 +17,11 @@ interface ReadingMarkdownProps {
 }
 
 export function getReadingTocItems(content: string) {
-  return extractTocFromMarkdown(content);
+  const parts = splitContentWithQuizzes(content);
+  const textParts = parts
+    .filter((part): part is { type: "text"; content: string } => part.type === "text")
+    .map((part) => part.content);
+  return buildTocFromTextParts(textParts);
 }
 
 function ReadingMarkdown({
@@ -25,16 +30,29 @@ function ReadingMarkdown({
   onQuizSubmitted,
   deferMermaidRender = false,
 }: ReadingMarkdownProps) {
-  const parts = splitContentWithQuizzes(content);
+  const blocks = useMemo(() => {
+    const parts = splitContentWithQuizzes(content);
+    const headingState = createHeadingIdState();
+
+    return parts.map((part) => {
+      if (part.type === "quiz") {
+        return { type: "quiz" as const, quiz: part.quiz };
+      }
+      return {
+        type: "sections" as const,
+        sections: splitMarkdownByH2(part.content, headingState),
+      };
+    });
+  }, [content]);
 
   return (
     <div className="reading-markdown">
-      {parts.map((part, partIndex) => {
-        if (part.type === "quiz") {
+      {blocks.map((block, blockIndex) => {
+        if (block.type === "quiz") {
           return (
-            <div key={`quiz-${partIndex}`} className="reading-quiz-wrap">
+            <div key={`quiz-${blockIndex}`} className="reading-quiz-wrap">
               <QuizCard
-                quiz={part.quiz}
+                quiz={block.quiz}
                 knowledgeName={knowledgeName || "当前知识点"}
                 onSubmitted={onQuizSubmitted}
               />
@@ -42,12 +60,11 @@ function ReadingMarkdown({
           );
         }
 
-        const sections = splitMarkdownByH2(part.content);
-        if (sections.length === 0) return null;
+        if (block.sections.length === 0) return null;
 
-        return sections.map((section, sectionIndex) => (
+        return block.sections.map((section, sectionIndex) => (
           <SectionCard
-            key={`section-${partIndex}-${sectionIndex}`}
+            key={`section-${blockIndex}-${sectionIndex}`}
             id={section.id}
             title={section.title}
             accent={getSectionAccent(section.title)}

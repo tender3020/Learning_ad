@@ -357,7 +357,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
 
     const raf = requestAnimationFrame(() => {
       const elements = tocItems
-        .map((item) => document.getElementById(item.id))
+        .map((item) => scrollRoot.querySelector<HTMLElement>(`#${CSS.escape(item.id)}`))
         .filter((el): el is HTMLElement => el !== null);
 
       if (elements.length === 0) return;
@@ -404,13 +404,20 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
   }, []);
 
   const scrollToSection = useCallback((id: string) => {
-    const el = contentScrollRef.current;
-    const section = document.getElementById(id);
-    if (!el || !section) return;
-    const top = section.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 12;
-    el.scrollTo({ top, behavior: "smooth" });
-    setActiveTocId(id);
     setShowReadingToc(false);
+    requestAnimationFrame(() => {
+      const scrollRoot = contentScrollRef.current;
+      if (!scrollRoot) return;
+      const section = scrollRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+      if (!section) return;
+      const top =
+        section.getBoundingClientRect().top -
+        scrollRoot.getBoundingClientRect().top +
+        scrollRoot.scrollTop -
+        12;
+      scrollRoot.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      setActiveTocId(id);
+    });
   }, []);
 
   const openOutline = useCallback(() => {
@@ -581,7 +588,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
         <div className="flex-1 overflow-hidden flex min-h-0">
           <div
             ref={contentScrollRef}
-            className={`study-content-scroll flex-1 overflow-y-auto p-0 md:p-6 ${showQA ? "" : "w-full"}`}
+            className={`study-content-scroll flex-1 min-h-0 overflow-y-auto p-0 md:p-6 ${showQA ? "" : "w-full"}`}
           >
             {!content && !isLoading ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col items-center justify-center px-4">
