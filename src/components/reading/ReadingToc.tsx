@@ -1,11 +1,12 @@
-import { X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef } from "react";
+import MobileSideDrawer from "@/components/ui/MobileSideDrawer";
 
 export type TocItem = { id: string; title: string };
 
 type ReadingTocProps = {
   items: TocItem[];
   activeId?: string;
+  activeTitle?: string;
   onNavigate: (id: string) => void;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -14,19 +15,32 @@ type ReadingTocProps = {
 export default function ReadingToc({
   items,
   activeId,
+  activeTitle,
   onNavigate,
   mobileOpen = false,
   onMobileClose,
 }: ReadingTocProps) {
+  const activeItemRef = useRef<HTMLButtonElement>(null);
+  const resolvedActiveTitle =
+    activeTitle ?? items.find((item) => item.id === activeId)?.title;
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    requestAnimationFrame(() => {
+      activeItemRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, [mobileOpen, activeId]);
+
   if (items.length === 0) return null;
 
-  const list = (
+  const renderList = (variant: "desktop" | "drawer") => (
     <nav className="reading-toc" aria-label="章节目录">
-      <p className="reading-toc__heading">本章目录</p>
-      <ul className="reading-toc__list">
+      {variant === "desktop" && <p className="reading-toc__heading">本章目录</p>}
+      <ul className={`reading-toc__list ${variant === "drawer" ? "reading-toc__list--drawer" : ""}`}>
         {items.map((item) => (
           <li key={item.id}>
             <button
+              ref={activeId === item.id ? activeItemRef : undefined}
               type="button"
               className={`reading-toc__link ${activeId === item.id ? "reading-toc__link--active" : ""}`}
               onClick={() => onNavigate(item.id)}
@@ -41,41 +55,16 @@ export default function ReadingToc({
 
   return (
     <>
-      <aside className="reading-toc-desktop hidden lg:block">{list}</aside>
+      <aside className="reading-toc-desktop hidden lg:block">{renderList("desktop")}</aside>
 
-      <AnimatePresence>
-        {mobileOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="reading-toc-backdrop lg:hidden"
-              onClick={onMobileClose}
-            />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 320 }}
-              className="reading-toc-sheet lg:hidden"
-            >
-              <div className="reading-toc-sheet__header">
-                <span className="reading-toc-sheet__title">章节目录</span>
-                <button
-                  type="button"
-                  className="reading-toc-sheet__close"
-                  onClick={onMobileClose}
-                  aria-label="关闭目录"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              {list}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <MobileSideDrawer
+        open={mobileOpen}
+        onClose={() => onMobileClose?.()}
+        title="本章目录"
+        subtitle={resolvedActiveTitle ? `当前：${resolvedActiveTitle}` : undefined}
+      >
+        {renderList("drawer")}
+      </MobileSideDrawer>
     </>
   );
 }

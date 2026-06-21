@@ -817,43 +817,85 @@
   border-color: rgba(110, 86, 207, 0.2);
 }
 
-.reading-toc-backdrop {
+.mobile-side-drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 45;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 48;
 }
 
-.reading-toc-sheet {
+.mobile-side-drawer {
   position: fixed;
+  top: 0;
   bottom: 0;
   left: 0;
-  right: 0;
   z-index: 50;
-  max-height: 60vh;
-  padding: 1rem 1.25rem 1.5rem;
-  background: var(--bg-secondary);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px 16px 0 0;
-}
-
-.reading-toc-sheet__header {
+  width: min(320px, 85vw);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-.reading-toc-sheet__title {
+.mobile-side-drawer--right {
+  left: auto;
+  right: 0;
+  border-right: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
+}
+
+.mobile-side-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.mobile-side-drawer__title {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.reading-toc-sheet__close {
+.mobile-side-drawer__subtitle {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.mobile-side-drawer__close {
+  flex-shrink: 0;
   padding: 0.35rem;
   border-radius: 8px;
   color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mobile-side-drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-side-drawer__footer {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.reading-toc__list--drawer {
+  padding: 0.5rem 0.75rem 1rem;
+}
+
+.reading-toc__list--drawer .reading-toc__link {
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.65rem;
 }
 
 .study-focus-mode .study-sidebar-dim {
@@ -869,9 +911,18 @@
   background: rgba(0, 0, 0, 0.04);
 }
 
-.theme-light .reading-toc-sheet {
+.theme-light .mobile-side-drawer {
   background: #FFFFFF;
-  border-top-color: rgba(0, 0, 0, 0.08);
+  border-right-color: rgba(0, 0, 0, 0.08);
+}
+
+.theme-light .mobile-side-drawer__header,
+.theme-light .mobile-side-drawer__footer {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.theme-light .mobile-side-drawer__close {
+  background: rgba(0, 0, 0, 0.04);
 }
 
 /* 阅读区内公式、链接与代码对比度 */

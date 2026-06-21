@@ -13,14 +13,12 @@ import ReadingMarkdown, { getReadingTocItems } from "@/components/reading/Readin
 import ReadingShell from "@/components/reading/ReadingShell";
 import ReadingToolbar from "@/components/reading/ReadingToolbar";
 import ReadingToc from "@/components/reading/ReadingToc";
+import MobileSideDrawer from "@/components/ui/MobileSideDrawer";
+import StudyDayOutline, { StudyDayOutlineNav } from "@/components/study/StudyDayOutline";
 import {
   Send,
   Loader2,
   MessageCircle,
-  ChevronLeft,
-  CheckCircle,
-  Play,
-  Lock,
   Sparkles,
   GraduationCap,
   X,
@@ -66,6 +64,11 @@ export default function Study() {
     () => (content ? getReadingTocItems(content) : []),
     [content],
   );
+  const activeTocTitle = useMemo(
+    () => tocItems.find((item) => item.id === activeTocId)?.title,
+    [tocItems, activeTocId],
+  );
+  const activeDayRef = useRef<HTMLButtonElement>(null);
 
   const { user } = useAuth();
   const { data: plans, isLoading: plansLoading } = trpc.learning.getPlans.useQuery();
@@ -410,6 +413,23 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
     setShowReadingToc(false);
   }, []);
 
+  const openOutline = useCallback(() => {
+    setShowReadingToc(false);
+    setShowOutline(true);
+  }, []);
+
+  const openReadingToc = useCallback(() => {
+    setShowOutline(false);
+    setShowReadingToc(true);
+  }, []);
+
+  useEffect(() => {
+    if (!showOutline) return;
+    requestAnimationFrame(() => {
+      activeDayRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, [showOutline]);
+
   // 连续阅读约 30 分钟后提示休息
   useEffect(() => {
     if (!content?.trim() || isStreaming) {
@@ -475,83 +495,54 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
           <h2 className="text-sm font-medium text-[#8A8A8E] uppercase tracking-wider">学习大纲</h2>
           <p className="text-xs text-[#8A8A8E] mt-1 truncate">{store.goal || "学习计划"}</p>
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {effectiveOutline.map((item) => {
-            const isActive = item.dayNumber === store.currentDay;
-            const isCompleted = item.dayNumber < store.currentDay;
-            return (
-              <button key={item.dayNumber} onClick={() => goToDay(item.dayNumber)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
-                  isActive ? "bg-[rgba(110,86,207,0.15)] border border-[rgba(110,86,207,0.3)]" :
-                  "hover:bg-[rgba(255,255,255,0.03)] border border-transparent"
-                }`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  isCompleted ? "bg-[rgba(52,199,89,0.2)]" : isActive ? "bg-[rgba(110,86,207,0.2)]" : "bg-[rgba(255,255,255,0.05)]"
-                }`}>
-                  {isCompleted ? <CheckCircle size={14} className="text-[#34C759]" /> :
-                   isActive ? <Play size={12} className="text-[#6E56CF]" /> :
-                   <Lock size={12} className="text-[#8A8A8E]" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium truncate ${isActive ? "text-[#F5F5F7]" : "text-[#8A8A8E]"}`}>
-                    D{item.dayNumber}: {item.title}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <StudyDayOutline
+            outline={effectiveOutline}
+            currentDay={store.currentDay}
+            totalDays={store.totalDays}
+            onSelectDay={goToDay}
+          />
         </div>
-        <div className="p-4 border-t border-[rgba(255,255,255,0.05)] flex items-center justify-between">
-          <button onClick={() => goToDay(store.currentDay - 1)} disabled={store.currentDay <= 1}
-            className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-30 transition-all">
-            <ChevronLeft size={18} />
-          </button>
-          <span className="text-sm text-[#8A8A8E]">{store.currentDay} / {store.totalDays}</span>
-          <button onClick={() => goToDay(store.currentDay + 1)} disabled={store.currentDay >= store.totalDays}
-            className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-30 transition-all">
-            {/* Using ChevronRight via inline or simple arrow */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
+        <div className="p-4 border-t border-[rgba(255,255,255,0.05)]">
+          <StudyDayOutlineNav
+            currentDay={store.currentDay}
+            totalDays={store.totalDays}
+            onSelectDay={goToDay}
+          />
         </div>
       </div>
 
-      {/* ===== 移动端：大纲底部抽屉 ===== */}
-      <AnimatePresence>
-        {showOutline && (
-          <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="md:hidden fixed bottom-0 left-0 right-0 h-[70vh] liquid-glass rounded-t-3xl z-40 flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-[rgba(255,255,255,0.05)]">
-              <h2 className="text-sm font-medium text-[#8A8A8E]">学习大纲</h2>
-              <button onClick={() => setShowOutline(false)} className="w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-1">
-              {effectiveOutline.map((item) => {
-                const isActive = item.dayNumber === store.currentDay;
-                return (
-                  <button key={item.dayNumber} onClick={() => goToDay(item.dayNumber)}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all ${
-                      isActive ? "bg-[rgba(110,86,207,0.15)] border border-[rgba(110,86,207,0.3)]" :
-                      "hover:bg-[rgba(255,255,255,0.03)]"
-                    }`}>
-                    <span className={`text-xs font-medium ${isActive ? "text-[#6E56CF]" : "text-[#8A8A8E]"}`}>D{item.dayNumber}</span>
-                    <span className={`text-sm ${isActive ? "text-[#F5F5F7]" : "text-[#8A8A8E]"}`}>{item.title}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ===== 移动端：学习大纲左侧滑出 ===== */}
+      <MobileSideDrawer
+        open={showOutline}
+        onClose={() => setShowOutline(false)}
+        title="学习大纲"
+        subtitle={store.goal || "学习计划"}
+        hideFrom="md"
+        footer={
+          <StudyDayOutlineNav
+            currentDay={store.currentDay}
+            totalDays={store.totalDays}
+            onSelectDay={goToDay}
+          />
+        }
+      >
+        <StudyDayOutline
+          outline={effectiveOutline}
+          currentDay={store.currentDay}
+          totalDays={store.totalDays}
+          onSelectDay={goToDay}
+          activeItemRef={activeDayRef}
+          compact
+        />
+      </MobileSideDrawer>
 
       {/* ===== 中间内容区域 ===== */}
       <div className="flex-1 flex flex-col h-full z-10 min-w-0">
         {/* Header */}
         <div className="flex items-center justify-between px-2.5 md:px-6 py-2 md:py-4 border-b border-[rgba(255,255,255,0.05)] flex-shrink-0 gap-2">
           {/* 移动端：大纲切换按钮 */}
-          <button onClick={() => setShowOutline(true)} className="md:hidden w-7 h-7 rounded-md bg-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+          <button onClick={openOutline} className="md:hidden w-7 h-7 rounded-md bg-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
             <Menu size={14} />
           </button>
           <div className="min-w-0 flex-1">
@@ -632,7 +623,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                         onIncreaseFont={increaseFontSize}
                         onToggleLineHeight={toggleLineHeight}
                         onToggleFocus={toggleFocusMode}
-                        onOpenToc={() => setShowReadingToc(true)}
+                        onOpenToc={openReadingToc}
                         showTocButton={tocItems.length > 0}
                       />
                       <ReadingMarkdown
@@ -662,6 +653,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                     <ReadingToc
                       items={tocItems}
                       activeId={activeTocId}
+                      activeTitle={activeTocTitle}
                       onNavigate={scrollToSection}
                       mobileOpen={showReadingToc}
                       onMobileClose={() => setShowReadingToc(false)}
@@ -829,13 +821,6 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
         )}
       </AnimatePresence>
 
-      {/* 移动端大纲弹层遮罩 */}
-      <AnimatePresence>
-        {showOutline && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="md:hidden fixed inset-0 bg-black/40 z-30" onClick={() => setShowOutline(false)} />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
