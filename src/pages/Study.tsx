@@ -25,6 +25,29 @@ import {
   Menu,
 } from "lucide-react";
 
+const TOC_SCROLL_OFFSET = 12;
+
+function resolveActiveTocId(
+  scrollRoot: HTMLElement,
+  items: Array<{ id: string }>,
+): string | undefined {
+  const scrollPos = scrollRoot.scrollTop + TOC_SCROLL_OFFSET;
+  let active: string | undefined;
+
+  for (const item of items) {
+    const el = scrollRoot.querySelector<HTMLElement>(`#${CSS.escape(item.id)}`);
+    if (!el) continue;
+    const top =
+      el.getBoundingClientRect().top -
+      scrollRoot.getBoundingClientRect().top +
+      scrollRoot.scrollTop;
+    if (top <= scrollPos) active = item.id;
+    else break;
+  }
+
+  return active;
+}
+
 export default function Study() {
   const store = useLearningStore();
 
@@ -69,6 +92,7 @@ export default function Study() {
     [tocItems, activeTocId],
   );
   const activeDayRef = useRef<HTMLButtonElement>(null);
+  const tocScrollLockRef = useRef<string | null>(null);
 
   const { user } = useAuth();
   const { data: plans, isLoading: plansLoading } = trpc.learning.getPlans.useQuery();
@@ -333,6 +357,14 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
 
   useEffect(() => { qaEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [qaMessages, isAiTyping]);
 
+  const updateActiveTocFromScroll = useCallback(() => {
+    const scrollRoot = contentScrollRef.current;
+    if (!scrollRoot || tocItems.length === 0) return;
+    if (tocScrollLockRef.current) return;
+    const next = resolveActiveTocId(scrollRoot, tocItems);
+    setActiveTocId((prev) => (prev === next ? prev : next));
+  }, [tocItems]);
+
   const handleContentScroll = useCallback(() => {
     if (scrollRafRef.current !== null) return;
 
@@ -346,48 +378,24 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
       if (progressBarRef.current) {
         progressBarRef.current.style.width = `${pct}%`;
       }
+      updateActiveTocFromScroll();
     });
-  }, []);
+  }, [updateActiveTocFromScroll]);
 
   useEffect(() => {
     const scrollRoot = contentScrollRef.current;
-    if (!scrollRoot || tocItems.length === 0) return;
-
-    let observer: IntersectionObserver | null = null;
+    if (!scrollRoot || tocItems.length === 0) {
+      setActiveTocId(undefined);
+      return;
+    }
 
     const raf = requestAnimationFrame(() => {
-      const elements = tocItems
-        .map((item) => scrollRoot.querySelector<HTMLElement>(`#${CSS.escape(item.id)}`))
-        .filter((el): el is HTMLElement => el !== null);
-
-      if (elements.length === 0) return;
-
-      observer = new IntersectionObserver(
-        (entries) => {
-          const visible = entries.filter((e) => e.isIntersecting);
-          if (visible.length === 0) return;
-
-          const anchor = scrollRoot.getBoundingClientRect().top + 120;
-          const closest = visible.reduce((best, entry) =>
-            Math.abs(entry.boundingClientRect.top - anchor) <
-            Math.abs(best.boundingClientRect.top - anchor)
-              ? entry
-              : best,
-          );
-
-          const id = closest.target.id;
-          setActiveTocId((prev) => (prev === id ? prev : id));
-        },
-        { root: scrollRoot, threshold: [0, 0.05, 0.1, 0.25] },
-      );
-
-      for (const el of elements) observer.observe(el);
+      if (tocScrollLockRef.current) return;
+      const next = resolveActiveTocId(scrollRoot, tocItems);
+      setActiveTocId(next);
     });
 
-    return () => {
-      cancelAnimationFrame(raf);
-      observer?.disconnect();
-    };
+    return () => cancelAnimationFrame(raf);
   }, [tocItems, content]);
 
   useEffect(() => {
@@ -404,21 +412,41 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
   }, []);
 
   const scrollToSection = useCallback((id: string) => {
+    tocScrollLockRef.current = id;
     setShowReadingToc(false);
+    setActiveTocId(id);
     requestAnimationFrame(() => {
       const scrollRoot = contentScrollRef.current;
-      if (!scrollRoot) return;
+      if (!scrollRoot) {
+        tocScrollLockRef.current = null;
+        return;
+      }
       const section = scrollRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-      if (!section) return;
+      if (!section) {
+        tocScrollLockRef.current = null;
+        return;
+      }
       const top =
         section.getBoundingClientRect().top -
         scrollRoot.getBoundingClientRect().top +
         scrollRoot.scrollTop -
-        12;
+        TOC_SCROLL_OFFSET;
       scrollRoot.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-      setActiveTocId(id);
+
+      let unlocked = false;
+      const unlock = () => {
+        if (unlocked) return;
+        unlocked = true;
+        scrollRoot.removeEventListener("scrollend", unlock);
+        window.clearTimeout(fallbackTimer);
+        tocScrollLockRef.current = null;
+        updateActiveTocFromScroll();
+      };
+
+      scrollRoot.addEventListener("scrollend", unlock, { once: true });
+      const fallbackTimer = window.setTimeout(unlock, 800);
     });
-  }, []);
+  }, [updateActiveTocFromScroll]);
 
   const openOutline = useCallback(() => {
     setShowReadingToc(false);
