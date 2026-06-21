@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -42,7 +42,7 @@ function preprocessContent(content: string): string {
   return preprocessMath(stripIllustrationMarkers(content));
 }
 
-export default function MarkdownRenderer({
+function MarkdownRenderer({
   content,
   className = "",
   knowledgeName = "",
@@ -252,3 +252,5 @@ function getMarkdownComponents(
     ),
   };
 }
+
+export default memo(MarkdownRenderer);

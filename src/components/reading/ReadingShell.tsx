@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 import type { ReadingFontSize, ReadingLineHeight, ReadingMode } from "@/hooks/useReadingPrefs";
 
 type ReadingShellProps = {
@@ -28,7 +28,7 @@ const LINE_HEIGHT_CLASS: Record<ReadingLineHeight, string> = {
   relaxed: "reading-leading-relaxed",
 };
 
-export default function ReadingShell({
+function ReadingShell({
   mode,
   fontSize,
   lineHeight,
@@ -60,3 +60,5 @@ export default function ReadingShell({
     </div>
   );
 }
+
+export default memo(ReadingShell);

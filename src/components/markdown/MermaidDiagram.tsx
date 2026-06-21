@@ -66,7 +66,8 @@ function MermaidDiagram({ chart, deferRender = false }: MermaidDiagramProps) {
     }
 
     let cancelled = false;
-    const timer = setTimeout(async () => {
+
+    void (async () => {
       configureMermaid();
       const renderId = `mermaid-${reactId}-${renderCountRef.current++}`;
 
@@ -84,11 +85,10 @@ function MermaidDiagram({ chart, deferRender = false }: MermaidDiagramProps) {
           setSvgHtml(null);
         }
       }
-    }, 200);
+    })();
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   }, [chart, reactId, deferRender]);
 

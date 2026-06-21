@@ -343,20 +343,49 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
       if (progressBarRef.current) {
         progressBarRef.current.style.width = `${pct}%`;
       }
-
-      if (tocItems.length > 0) {
-        const scrollTop = el.scrollTop + 120;
-        let current: string | undefined;
-        for (const item of tocItems) {
-          const section = document.getElementById(item.id);
-          if (section && section.offsetTop <= scrollTop) {
-            current = item.id;
-          }
-        }
-        setActiveTocId((prev) => (prev === current ? prev : current));
-      }
     });
-  }, [tocItems]);
+  }, []);
+
+  useEffect(() => {
+    const scrollRoot = contentScrollRef.current;
+    if (!scrollRoot || tocItems.length === 0) return;
+
+    let observer: IntersectionObserver | null = null;
+
+    const raf = requestAnimationFrame(() => {
+      const elements = tocItems
+        .map((item) => document.getElementById(item.id))
+        .filter((el): el is HTMLElement => el !== null);
+
+      if (elements.length === 0) return;
+
+      observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries.filter((e) => e.isIntersecting);
+          if (visible.length === 0) return;
+
+          const anchor = scrollRoot.getBoundingClientRect().top + 120;
+          const closest = visible.reduce((best, entry) =>
+            Math.abs(entry.boundingClientRect.top - anchor) <
+            Math.abs(best.boundingClientRect.top - anchor)
+              ? entry
+              : best,
+          );
+
+          const id = closest.target.id;
+          setActiveTocId((prev) => (prev === id ? prev : id));
+        },
+        { root: scrollRoot, threshold: [0, 0.05, 0.1, 0.25] },
+      );
+
+      for (const el of elements) observer.observe(el);
+    });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer?.disconnect();
+    };
+  }, [tocItems, content]);
 
   useEffect(() => {
     const el = contentScrollRef.current;
@@ -365,6 +394,11 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
     el.addEventListener("scroll", handleContentScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleContentScroll);
   }, [content, handleContentScroll]);
+
+  const handleDismissBreak = useCallback(() => {
+    setBreakDismissed(true);
+    setShowBreakReminder(false);
+  }, []);
 
   const scrollToSection = useCallback((id: string) => {
     const el = contentScrollRef.current;
@@ -556,7 +590,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
         <div className="flex-1 overflow-hidden flex min-h-0">
           <div
             ref={contentScrollRef}
-            className={`flex-1 overflow-y-auto p-0 md:p-6 ${showQA ? "" : "w-full"}`}
+            className={`study-content-scroll flex-1 overflow-y-auto p-0 md:p-6 ${showQA ? "" : "w-full"}`}
           >
             {!content && !isLoading ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col items-center justify-center px-4">
@@ -586,10 +620,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                       lineHeight={readingPrefs.lineHeight}
                       progressBarRef={progressBarRef}
                       breakReminder={showBreakReminder && !breakDismissed}
-                      onDismissBreak={() => {
-                        setBreakDismissed(true);
-                        setShowBreakReminder(false);
-                      }}
+                      onDismissBreak={handleDismissBreak}
                     >
                       <ReadingToolbar
                         mode={readingPrefs.mode}

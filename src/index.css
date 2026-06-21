@@ -458,6 +458,10 @@
   margin: 0 auto;
 }
 
+.study-content-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
 .markdown-body .content-illustration {
   display: block;
   width: min(72%, 480px);
@@ -933,6 +937,7 @@
     border-radius: 0;
     border-left: none;
     border-right: none;
+    overflow: visible;
   }
 
   .reading-shell__inner {
@@ -948,6 +953,7 @@
     border: none;
     background: transparent;
     border-radius: 0;
+    overflow: visible;
   }
 
   .section-card__header {
@@ -966,6 +972,11 @@
   .markdown-body .content-illustration {
     width: 100%;
     max-width: none;
+  }
+
+  .markdown-body .mermaid-diagram {
+    transform: translateZ(0);
+    contain: layout style;
   }
 }
 
