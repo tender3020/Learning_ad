@@ -657,6 +657,7 @@ ${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
                       onNavigate={scrollToSection}
                       mobileOpen={showReadingToc}
                       onMobileClose={() => setShowReadingToc(false)}
+                      readingMode={readingPrefs.mode}
                     />
                   </>
                 )}

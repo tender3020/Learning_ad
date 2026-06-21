@@ -824,6 +824,10 @@
   z-index: 48;
 }
 
+.mobile-side-drawer-backdrop--reading {
+  background: rgba(0, 0, 0, 0.3);
+}
+
 .mobile-side-drawer {
   position: fixed;
   top: 0;
@@ -845,6 +849,43 @@
   border-right: none;
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
+}
+
+.mobile-side-drawer--reading {
+  width: min(260px, 70vw);
+  max-width: 70vw;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+  overflow: hidden;
+  background: var(--reading-bg);
+  border-color: var(--reading-border);
+  color: var(--reading-text-body);
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.25);
+}
+
+.mobile-side-drawer--reading .mobile-side-drawer__header {
+  padding: 0.625rem 1rem 0.5rem;
+  border-bottom-color: var(--reading-border);
+}
+
+.mobile-side-drawer--reading .mobile-side-drawer__title {
+  font-size: 0.8125rem;
+  color: var(--reading-text-heading);
+}
+
+.mobile-side-drawer--reading .mobile-side-drawer__subtitle {
+  font-size: 0.6875rem;
+  color: var(--reading-text-muted);
+}
+
+.mobile-side-drawer--reading .mobile-side-drawer__close {
+  color: var(--reading-text-muted);
+  background: var(--reading-card-bg);
+  border: 1px solid var(--reading-card-border);
+}
+
+.mobile-side-drawer--reading .mobile-side-drawer__body {
+  padding: 0;
 }
 
 .mobile-side-drawer__header {
@@ -898,6 +939,28 @@
   padding: 0.5rem 0.65rem;
 }
 
+.reading-toc__list--panel {
+  padding: 0.375rem 1rem 1rem;
+  gap: 0.1rem;
+}
+
+.reading-toc__list--panel .reading-toc__link {
+  font-size: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  color: var(--reading-text-muted);
+}
+
+.reading-toc__list--panel .reading-toc__link:hover {
+  color: var(--reading-text-heading);
+  background: var(--reading-card-bg);
+}
+
+.reading-toc__list--panel .reading-toc__link--active {
+  color: var(--reading-accent);
+  background: rgba(110, 86, 207, 0.12);
+  border-color: rgba(110, 86, 207, 0.2);
+}
+
 .study-focus-mode .study-sidebar-dim {
   opacity: 0.55;
   transition: opacity 0.2s;
@@ -916,13 +979,27 @@
   border-right-color: rgba(0, 0, 0, 0.08);
 }
 
+.theme-light .mobile-side-drawer--reading {
+  background: var(--reading-bg);
+  border-left-color: var(--reading-border);
+}
+
 .theme-light .mobile-side-drawer__header,
 .theme-light .mobile-side-drawer__footer {
   border-color: rgba(0, 0, 0, 0.06);
 }
 
+.theme-light .mobile-side-drawer--reading .mobile-side-drawer__header {
+  border-bottom-color: var(--reading-border);
+}
+
 .theme-light .mobile-side-drawer__close {
   background: rgba(0, 0, 0, 0.04);
+}
+
+.theme-light .mobile-side-drawer--reading .mobile-side-drawer__close {
+  background: var(--reading-card-bg);
+  border-color: var(--reading-card-border);
 }
 
 /* 阅读区内公式、链接与代码对比度 */

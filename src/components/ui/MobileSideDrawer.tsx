@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type MobileSideDrawerProps = {
   open: boolean;
@@ -10,6 +11,8 @@ type MobileSideDrawerProps = {
   children: ReactNode;
   footer?: ReactNode;
   side?: "left" | "right";
+  variant?: "default" | "reading";
+  className?: string;
   /** Hide drawer at this breakpoint and above (matches desktop layout) */
   hideFrom?: "md" | "lg";
   scrollRef?: React.RefObject<HTMLDivElement | null>;
@@ -23,6 +26,8 @@ export default function MobileSideDrawer({
   children,
   footer,
   side = "left",
+  variant = "default",
+  className,
   hideFrom = "lg",
   scrollRef,
 }: MobileSideDrawerProps) {
@@ -60,7 +65,11 @@ export default function MobileSideDrawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`mobile-side-drawer-backdrop ${hideClass}`}
+            className={cn(
+              "mobile-side-drawer-backdrop",
+              hideClass,
+              variant === "reading" && "mobile-side-drawer-backdrop--reading",
+            )}
             onClick={onClose}
             aria-hidden
           />
@@ -72,7 +81,13 @@ export default function MobileSideDrawer({
             animate={{ x: 0 }}
             exit={{ x: slideFrom }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className={`mobile-side-drawer ${hideClass} ${side === "right" ? "mobile-side-drawer--right" : ""}`}
+            className={cn(
+              "mobile-side-drawer",
+              hideClass,
+              side === "right" && "mobile-side-drawer--right",
+              variant === "reading" && "mobile-side-drawer--reading",
+              className,
+            )}
           >
             <div className="mobile-side-drawer__header">
               <div className="min-w-0 flex-1">

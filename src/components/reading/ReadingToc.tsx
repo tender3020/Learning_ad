@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import MobileSideDrawer from "@/components/ui/MobileSideDrawer";
+import type { ReadingMode } from "@/hooks/useReadingPrefs";
 
 export type TocItem = { id: string; title: string };
 
@@ -10,6 +11,7 @@ type ReadingTocProps = {
   onNavigate: (id: string) => void;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+  readingMode?: ReadingMode;
 };
 
 export default function ReadingToc({
@@ -19,6 +21,7 @@ export default function ReadingToc({
   onNavigate,
   mobileOpen = false,
   onMobileClose,
+  readingMode = "soft-dark",
 }: ReadingTocProps) {
   const activeItemRef = useRef<HTMLButtonElement>(null);
   const resolvedActiveTitle =
@@ -36,7 +39,9 @@ export default function ReadingToc({
   const renderList = (variant: "desktop" | "drawer") => (
     <nav className="reading-toc" aria-label="章节目录">
       {variant === "desktop" && <p className="reading-toc__heading">本章目录</p>}
-      <ul className={`reading-toc__list ${variant === "drawer" ? "reading-toc__list--drawer" : ""}`}>
+      <ul
+        className={`reading-toc__list ${variant === "drawer" ? "reading-toc__list--drawer reading-toc__list--panel" : ""}`}
+      >
         {items.map((item) => (
           <li key={item.id}>
             <button
@@ -62,6 +67,9 @@ export default function ReadingToc({
         onClose={() => onMobileClose?.()}
         title="本章目录"
         subtitle={resolvedActiveTitle ? `当前：${resolvedActiveTitle}` : undefined}
+        side="right"
+        variant="reading"
+        className={`reading-shell reading-shell--${readingMode}`}
       >
         {renderList("drawer")}
       </MobileSideDrawer>
