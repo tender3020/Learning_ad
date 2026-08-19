@@ -10,7 +10,7 @@ type MobileSideDrawerProps = {
   subtitle?: string;
   children: ReactNode;
   footer?: ReactNode;
-  side?: "left" | "right";
+  side?: "left" | "right" | "bottom";
   variant?: "default" | "reading";
   className?: string;
   /** Hide drawer at this breakpoint and above (matches desktop layout) */
@@ -55,7 +55,8 @@ export default function MobileSideDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const slideFrom = side === "left" ? "-100%" : "100%";
+  const slideFrom = side === "left" ? "-100%" : side === "right" ? "100%" : "100%";
+  const isBottom = side === "bottom";
 
   return (
     <AnimatePresence>
@@ -77,14 +78,15 @@ export default function MobileSideDrawer({
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            initial={{ x: slideFrom }}
-            animate={{ x: 0 }}
-            exit={{ x: slideFrom }}
+            initial={isBottom ? { y: slideFrom } : { x: slideFrom }}
+            animate={isBottom ? { y: 0 } : { x: 0 }}
+            exit={isBottom ? { y: slideFrom } : { x: slideFrom }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
             className={cn(
               "mobile-side-drawer",
               hideClass,
               side === "right" && "mobile-side-drawer--right",
+              isBottom && "mobile-side-drawer--bottom",
               variant === "reading" && "mobile-side-drawer--reading",
               className,
             )}

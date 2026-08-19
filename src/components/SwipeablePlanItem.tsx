@@ -147,8 +147,8 @@ export default function SwipeablePlanItem({ plan, isCurrent, onSelect, onDelete,
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="flex flex-col items-center gap-1"
         >
-          <Trash2 size={18} className="text-[#FF3B30]" />
-          <span className="text-[9px] text-[#FF3B30] font-medium">删除</span>
+          <Trash2 size={18} style={{ color: "var(--color-danger)" }} />
+          <span className="type-caption font-medium" style={{ color: "var(--color-danger)" }}>删除</span>
         </button>
       </div>
 
@@ -168,50 +168,50 @@ export default function SwipeablePlanItem({ plan, isCurrent, onSelect, onDelete,
         <div
           className={`liquid-glass rounded-xl p-3 md:p-4 cursor-pointer transition-all ${
             isCurrent
-              ? "border border-[rgba(110,86,207,0.3)]"
-              : "border border-transparent hover:border-[rgba(255,255,255,0.08)]"
+              ? "border border-[color-mix(in_srgb,var(--brand-primary)_35%,transparent)]"
+              : "border border-transparent hover:border-token-surface"
           }`}
         >
           <div className="flex items-center gap-3">
             <div
               className={`w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                 isCurrent
-                  ? "bg-[rgba(110,86,207,0.15)]"
+                  ? "bg-token-brand-muted"
                   : plan.status === "completed"
-                    ? "bg-[rgba(52,199,89,0.1)]"
-                    : "bg-[rgba(255,255,255,0.03)]"
+                    ? "bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)]"
+                    : "bg-[var(--surface-hover)]"
               }`}
             >
               {isCurrent ? (
-                <Play size={16} className="text-[#6E56CF]" />
+                <Play size={16} className="text-token-brand" />
               ) : plan.status === "completed" ? (
-                <CheckCircle2 size={16} className="text-[#34C759]" />
+                <CheckCircle2 size={16} style={{ color: "var(--color-success)" }} />
               ) : (
-                <BookOpen size={16} className="text-[#8A8A8E]" />
+                <BookOpen size={16} className="text-token-secondary" />
               )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p
                   className={`text-sm font-medium truncate ${
-                    isCurrent ? "text-[#A78BFA]" : "text-[#F5F5F7]"
+                    isCurrent ? "text-token-brand-light" : "text-token-primary"
                   }`}
                 >
                   {plan.goal}
                 </p>
                 {isCurrent && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[rgba(110,86,207,0.15)] text-[#A78BFA] flex-shrink-0">
+                  <span className="type-caption px-1.5 py-0.5 rounded-full bg-token-brand-muted text-token-brand-light flex-shrink-0">
                     当前
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <p className="text-[10px] md:text-xs text-[#8A8A8E]">
+                <p className="type-caption text-token-secondary">
                   第 {plan.currentDay}/{plan.totalDays} 天 · {planProgress}%
                 </p>
                 {plan.learningType && (
                   <span
-                    className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                    className="type-caption px-1.5 py-0.5 rounded-full font-medium"
                     style={{
                       color: TYPE_LABELS[plan.learningType as keyof typeof TYPE_LABELS]?.color || "#8A8A8E",
                       background: `${TYPE_LABELS[plan.learningType as keyof typeof TYPE_LABELS]?.color || "#8A8A8E"}15`,
@@ -224,7 +224,7 @@ export default function SwipeablePlanItem({ plan, isCurrent, onSelect, onDelete,
             </div>
           </div>
           {/* 进度条 */}
-          <div className="mt-2 h-1 bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden">
+          <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ backgroundColor: "var(--surface-border)" }}>
             <div
               className="h-full rounded-full transition-all"
               style={{

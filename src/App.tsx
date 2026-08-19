@@ -6,29 +6,26 @@ import NotFound from "./pages/NotFound";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Study from "./pages/Study";
-import Mastery from "./pages/Mastery";
-import History from "./pages/History";
+import Progress from "./pages/Progress";
 import Settings from "./pages/Settings";
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // 加载中显示 spinner
   if (isLoading) {
     return (
-      <div className="h-screen w-screen bg-[#050505] flex items-center justify-center">
+      <div className="h-screen w-screen flex items-center justify-center" style={{ backgroundColor: "var(--bg-primary)" }}>
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 rounded-xl overflow-hidden">
             <img src="/logo.png" alt="弈智" className="w-full h-full object-cover" />
           </div>
-          <div className="w-6 h-6 border-2 border-[#6E56CF] border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-[#8A8A8E]">加载中...</p>
+          <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--brand-primary)", borderTopColor: "transparent" }} />
+          <p className="text-xs text-token-secondary">加载中...</p>
         </div>
       </div>
     );
   }
 
-  // 未认证重定向到登录页
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -36,20 +33,19 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
-// 已登录用户访问登录页时重定向到首页
 function LoginRouteGuard() {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="h-screen w-screen bg-[#050505] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-[#6E56CF] border-t-transparent rounded-full animate-spin" />
+      <div className="h-screen w-screen flex items-center justify-center" style={{ backgroundColor: "var(--bg-primary)" }}>
+        <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--brand-primary)", borderTopColor: "transparent" }} />
       </div>
     );
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/today" replace />;
   }
 
   return <Login />;
@@ -64,26 +60,25 @@ export default function App() {
           <Onboarding />
         </AuthenticatedLayout>
       } />
-      <Route path="/" element={
-        <AuthenticatedLayout>
-          <Dashboard />
-        </AuthenticatedLayout>
-      } />
-      <Route path="/study" element={
+      <Route path="/" element={<Navigate to="/today" replace />} />
+      <Route path="/today" element={
         <AuthenticatedLayout>
           <Study />
         </AuthenticatedLayout>
       } />
-      <Route path="/mastery" element={
+      <Route path="/study" element={<Navigate to="/today" replace />} />
+      <Route path="/plans" element={
         <AuthenticatedLayout>
-          <Mastery />
+          <Dashboard />
         </AuthenticatedLayout>
       } />
-      <Route path="/history" element={
+      <Route path="/progress" element={
         <AuthenticatedLayout>
-          <History />
+          <Progress />
         </AuthenticatedLayout>
       } />
+      <Route path="/mastery" element={<Navigate to="/progress" replace />} />
+      <Route path="/history" element={<Navigate to="/progress?tab=records" replace />} />
       <Route path="/settings" element={
         <AuthenticatedLayout>
           <Settings />

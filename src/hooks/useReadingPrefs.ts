@@ -17,7 +17,7 @@ const DEFAULT_PREFS: ReadingPrefs = {
   mode: "soft-dark",
   fontSize: "md",
   lineHeight: "relaxed",
-  focusMode: false,
+  focusMode: true,
 };
 
 function loadPrefs(): ReadingPrefs {

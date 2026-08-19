@@ -7,7 +7,7 @@ import { aiService } from "@/services/aiService";
 import { useTtsPlayer } from "@/hooks/useTtsPlayer";
 import { useReadingPrefs } from "@/hooks/useReadingPrefs";
 import TtsButton from "@/components/TtsButton";
-import WireframeSphere from "@/components/3d/WireframeSphere";
+import TodayHeader, { type TodayContentState } from "@/components/today/TodayHeader";
 import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
 import ReadingMarkdown, { getReadingTocItems } from "@/components/reading/ReadingMarkdown";
 import ReadingShell from "@/components/reading/ReadingShell";
@@ -84,6 +84,7 @@ export default function Study() {
   const [activeTocId, setActiveTocId] = useState<string | undefined>();
   const [showBreakReminder, setShowBreakReminder] = useState(false);
   const [breakDismissed, setBreakDismissed] = useState(false);
+  const [isIllustrating, setIsIllustrating] = useState(false);
 
   const tocItems = useMemo(
     () => (content ? getReadingTocItems(content) : []),
@@ -126,12 +127,15 @@ export default function Study() {
       const dayNumber = store.currentDay;
       utils.content.getContent.invalidate({ planId, dayNumber });
 
-      // 配图在后台生成，定时刷新内容直至配图写入或超时
+      setIsIllustrating(true);
       let polls = 0;
       const pollTimer = setInterval(() => {
         polls += 1;
         utils.content.getContent.invalidate({ planId, dayNumber });
-        if (polls >= 12) clearInterval(pollTimer);
+        if (polls >= 12) {
+          clearInterval(pollTimer);
+          setIsIllustrating(false);
+        }
       }, 15000);
     },
   });
@@ -150,6 +154,16 @@ export default function Study() {
     ? `基于：第 ${store.currentDay} 天 · ${todayItem.title}`
     : "请先完成今日学习内容";
   const qaInputPlaceholder = canAskQA ? "输入问题..." : "请先生成今日学习内容";
+
+  const todayContentState: TodayContentState = isStreaming
+    ? "streaming"
+    : isLoading && !content
+      ? "loading"
+      : isIllustrating && content
+        ? "illustrating"
+        : content
+          ? "ready"
+          : "empty";
 
   // 学习时长追踪：每60秒增加1分钟计数
   useEffect(() => {
@@ -512,24 +526,38 @@ export default function Study() {
   const goToDay = (day: number) => {
     if (day >= 1 && day <= store.totalDays) {
       tts.stop();
-      store.setCurrentDay(day); setContent(""); setError(""); setShowOutline(false); setQaMessages([]);
+      store.setCurrentDay(day);
+      setContent("");
+      setError("");
+      setShowOutline(false);
+      setQaMessages([]);
+      setIsIllustrating(false);
     }
   };
 
   if (plansLoading) {
-    return <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#6E56CF] border-t-transparent rounded-full animate-spin" /></div>;
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div
+          className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+          style={{ borderColor: "var(--brand-primary)", borderTopColor: "transparent" }}
+        />
+      </div>
+    );
   }
 
   if (!store.currentPlanId) {
     return (
       <div className="h-full flex items-center justify-center relative">
-        <WireframeSphere opacity={0.1} />
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 text-center max-w-md px-6">
-          <GraduationCap size={48} className="mx-auto mb-4 text-[#6E56CF]" />
-          <h2 className="text-xl md:text-2xl font-semibold text-[#F5F5F7] mb-2">还没有学习计划</h2>
-          <p className="text-sm text-[#8A8A8E] mb-6">让 AI 为你定制一个个性化的学习路径。</p>
-          <button onClick={() => window.location.href = "/onboarding"}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl font-medium transition-colors brand-glow">
+          <GraduationCap size={48} className="mx-auto mb-4 text-token-brand" />
+          <h2 className="text-xl md:text-2xl font-semibold text-token-primary mb-2">还没有学习计划</h2>
+          <p className="text-sm text-token-secondary mb-6">让 AI 为你定制一个个性化的学习路径。</p>
+          <button
+            type="button"
+            onClick={() => { window.location.href = "/onboarding"; }}
+            className="inline-flex items-center gap-2 px-6 py-3 text-white rounded-xl font-medium transition-colors brand-glow bg-token-brand hover:opacity-90"
+          >
             <Sparkles size={18} /> 创建学习计划
           </button>
         </motion.div>
@@ -539,13 +567,11 @@ export default function Study() {
 
   return (
     <div className={`h-full flex relative ${readingPrefs.focusMode ? "study-focus-mode" : ""}`}>
-      <WireframeSphere opacity={readingPrefs.focusMode ? 0 : 0.08} />
-
       {/* ===== 桌面端侧边大纲 (md 及以上) ===== */}
-      <div className={`hidden md:flex w-60 lg:w-64 h-full liquid-glass border-r border-[rgba(255,255,255,0.05)] z-10 flex-col flex-shrink-0 ${readingPrefs.focusMode ? "study-sidebar-dim" : ""}`}>
-        <div className="p-4 border-b border-[rgba(255,255,255,0.05)]">
-          <h2 className="text-sm font-medium text-[#8A8A8E] uppercase tracking-wider">学习大纲</h2>
-          <p className="text-xs text-[#8A8A8E] mt-1 truncate">{store.goal || "学习计划"}</p>
+      <div className={`hidden md:flex w-60 lg:w-64 h-full liquid-glass border-r border-token-surface z-10 flex-col flex-shrink-0 ${readingPrefs.focusMode ? "study-sidebar-dim" : ""}`}>
+        <div className="p-4 border-b border-token-surface">
+          <h2 className="type-caption font-medium text-token-secondary uppercase tracking-wider">学习大纲</h2>
+          <p className="type-caption text-token-secondary mt-1 truncate">{store.goal || "学习计划"}</p>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
           <StudyDayOutline
@@ -555,7 +581,7 @@ export default function Study() {
             onSelectDay={goToDay}
           />
         </div>
-        <div className="p-4 border-t border-[rgba(255,255,255,0.05)]">
+        <div className="p-4 border-t border-token-surface">
           <StudyDayOutlineNav
             currentDay={store.currentDay}
             totalDays={store.totalDays}
@@ -571,6 +597,7 @@ export default function Study() {
         title="学习大纲"
         subtitle={store.goal || "学习计划"}
         hideFrom="md"
+        side="bottom"
         footer={
           <StudyDayOutlineNav
             currentDay={store.currentDay}
@@ -591,43 +618,52 @@ export default function Study() {
 
       {/* ===== 中间内容区域 ===== */}
       <div className="flex-1 flex flex-col h-full z-10 min-w-0">
-        {/* Header */}
-        <div className="flex items-center justify-between px-2.5 md:px-6 py-2 md:py-4 border-b border-[rgba(255,255,255,0.05)] flex-shrink-0 gap-2">
-          {/* 移动端：大纲切换按钮 */}
-          <button onClick={openOutline} className="md:hidden w-7 h-7 rounded-md bg-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
-            <Menu size={14} />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xs md:text-lg font-semibold text-[#F5F5F7] truncate">{todayItem?.title || "今日学习"}</h1>
-            <p className="text-[9px] md:text-xs text-[#8A8A8E] truncate">{todayItem?.goal}</p>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {(error || tts.error) && (
-              <span className="hidden sm:inline text-xs text-[#FF3B30] max-w-[200px] truncate">
-                {error || tts.error}
-              </span>
-            )}
-            {content && !isStreaming && (
-              <TtsButton
-                id={contentTtsId}
-                text={contentSpeechText}
-                status={tts.getStatus(contentTtsId)}
-                onPlay={tts.play}
-                label={tts.progress && tts.activeId === contentTtsId
-                  ? `${tts.progress.current}/${tts.progress.total}`
-                  : "朗读"}
-              />
-            )}
-            <button onClick={() => setShowQA(!showQA)}
-              className={`flex items-center gap-1.5 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-medium transition-all ${
-                showQA ? "bg-[rgba(110,86,207,0.2)] text-[#A78BFA] border border-[rgba(110,86,207,0.3)]" :
-                "liquid-glass text-[#8A8A8E] hover:text-[#F5F5F7]"
-              }`}>
-              <MessageCircle size={14} />
-              <span className="hidden sm:inline">AI 问答</span>
-            </button>
-          </div>
-        </div>
+        <TodayHeader
+          dayNumber={store.currentDay}
+          totalDays={store.totalDays}
+          phaseName={todayItem?.phaseName}
+          phaseOrder={todayItem?.phaseOrder}
+          title={todayItem?.title || "今日学习"}
+          goal={todayItem?.goal}
+          estimatedMinutes={todayItem?.estimatedMinutes}
+          state={todayContentState}
+          onGenerate={handleGenerateContent}
+          isGenerating={isLoading || isStreaming}
+          actions={
+            <>
+              {(error || tts.error) && (
+                <span className="type-caption truncate max-w-[140px]" style={{ color: "var(--color-danger)" }}>
+                  {error || tts.error}
+                </span>
+              )}
+              {content && !isStreaming && (
+                <TtsButton
+                  id={contentTtsId}
+                  text={contentSpeechText}
+                  status={tts.getStatus(contentTtsId)}
+                  onPlay={tts.play}
+                  label={
+                    tts.progress && tts.activeId === contentTtsId
+                      ? `${tts.progress.current}/${tts.progress.total}`
+                      : "朗读"
+                  }
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => setShowQA(!showQA)}
+                className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl type-caption font-medium transition-all ${
+                  showQA
+                    ? "bg-token-brand-muted text-token-brand-light border border-[color-mix(in_srgb,var(--brand-primary)_30%,transparent)]"
+                    : "text-token-secondary hover:text-token-primary hover-surface"
+                }`}
+              >
+                <MessageCircle size={14} />
+                <span>问答</span>
+              </button>
+            </>
+          }
+        />
 
         {/* 内容主体 */}
         <div className="flex-1 overflow-hidden flex min-h-0">
@@ -636,24 +672,30 @@ export default function Study() {
             className={`study-content-scroll flex-1 min-h-0 overflow-y-auto p-0 md:p-6 ${showQA ? "" : "w-full"}`}
           >
             {!content && !isLoading ? (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col items-center justify-center px-4">
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-[rgba(110,86,207,0.1)] flex items-center justify-center mb-4">
-                  <Sparkles size={24} className="text-[#6E56CF]" />
+              <div className="h-full flex flex-col items-center justify-center px-4">
+                <div className="w-full max-w-md surface-elevated rounded-2xl p-5 md:p-6">
+                  <p className="type-caption text-token-brand mb-2">今日课纲</p>
+                  <h3 className="type-title font-semibold text-token-primary mb-2">{todayItem?.title || "今日学习"}</h3>
+                  {todayItem?.goal && (
+                    <p className="type-body text-token-secondary mb-3">{todayItem.goal}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2 type-caption text-token-secondary">
+                    {todayItem?.estimatedMinutes ? <span>~{todayItem.estimatedMinutes} 分钟</span> : null}
+                    {todayItem?.phaseName ? <span>· {todayItem.phaseName}</span> : null}
+                  </div>
+                  {todayItem?.keywords && (
+                    <p className="type-caption text-token-secondary mt-3">关键词：{todayItem.keywords}</p>
+                  )}
+                  <p className="type-caption text-token-secondary mt-4">点击顶栏「生成今日课程」开始学习</p>
                 </div>
-                <h3 className="text-base md:text-lg font-semibold text-[#F5F5F7] mb-2 text-center">准备生成学习内容</h3>
-                <p className="text-xs md:text-sm text-[#8A8A8E] mb-4 md:mb-6 text-center max-w-md">AI 将为你生成关于「{todayItem?.title}」的个性化学习内容。</p>
-                <button onClick={handleGenerateContent}
-                  className="flex items-center gap-2 px-5 py-2.5 md:px-6 md:py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl font-medium text-sm transition-colors brand-glow">
-                  <Sparkles size={16} /> 生成学习内容
-                </button>
-              </motion.div>
+              </div>
             ) : (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="reading-layout">
+              <div className="reading-layout">
                 {isLoading && !content ? (
                   <div className="flex flex-col items-center justify-center py-20 w-full">
-                    <Loader2 size={28} className="text-[#6E56CF] animate-spin mb-3" />
-                    <p className="text-sm text-[#8A8A8E]">AI 正在生成学习内容...</p>
-                    <p className="text-xs text-[#8A8A8E] mt-1">首次生成可能需要 10-30 秒</p>
+                    <Loader2 size={28} className="text-token-brand animate-spin mb-3" />
+                    <p className="type-body text-token-secondary">AI 正在生成学习内容...</p>
+                    <p className="type-caption text-token-secondary mt-1">首次生成可能需要 10-30 秒</p>
                   </div>
                 ) : (
                   <>
@@ -685,16 +727,17 @@ export default function Study() {
                         deferMermaidRender={isStreaming}
                       />
                       {isStreaming && (
-                        <div className="flex items-center gap-2 mt-4 text-[#6E56CF]">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-pulse" />
-                          <span className="text-xs">AI 正在输出...</span>
+                        <div className="flex items-center gap-2 mt-4 text-token-brand">
+                          <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-pulse" />
+                          <span className="type-caption">AI 正在编写…</span>
                         </div>
                       )}
                       {content && !isStreaming && (
                         <div className="mt-4 pt-3 border-t border-[var(--reading-card-border)]">
                           <button
+                            type="button"
                             onClick={() => { setContent(""); handleGenerateContent(); }}
-                            className="text-xs text-[var(--reading-text-muted)] hover:text-[#6E56CF] transition-colors"
+                            className="type-caption text-[var(--reading-text-muted)] hover:text-token-brand transition-colors"
                           >
                             重新生成内容
                           </button>
@@ -713,7 +756,7 @@ export default function Study() {
                     />
                   </>
                 )}
-              </motion.div>
+              </div>
             )}
           </div>
 
@@ -721,25 +764,25 @@ export default function Study() {
           <AnimatePresence>
             {showQA && (
               <motion.div initial={{ width: 0, opacity: 0 }} animate={{ width: 360, opacity: 1 }} exit={{ width: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }} className="hidden lg:flex border-l border-[rgba(255,255,255,0.05)] flex-col bg-[rgba(0,0,0,0.3)] flex-shrink-0 overflow-hidden">
-                <div className="p-4 border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full overflow-hidden bg-[rgba(110,86,207,0.15)]">
+                transition={{ duration: 0.3 }} className="hidden lg:flex border-l border-token-surface flex-col flex-shrink-0 overflow-hidden" style={{ backgroundColor: "var(--surface-elevated)" }}>
+                <div className="p-4 border-b border-token-surface flex items-center gap-2 flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-token-brand-muted">
                     <img src="/ai-avatar.png" alt="AI" className="w-full h-full object-cover" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-medium text-[#F5F5F7]">AI 学习导师</h3>
-                    <p className="text-[10px] text-[#8A8A8E] truncate max-w-[240px]">{qaContextLabel}</p>
+                    <h3 className="text-sm font-medium text-token-primary">AI 学习导师</h3>
+                    <p className="type-caption text-token-secondary truncate max-w-[240px]">{qaContextLabel}</p>
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
                   {qaMessages.length === 0 && (
                     <div className="text-center py-10">
-                      <MessageCircle size={28} className="mx-auto mb-2 text-[#8A8A8E]" />
-                      <p className="text-xs text-[#8A8A8E]">
+                      <MessageCircle size={28} className="mx-auto mb-2 text-token-secondary" />
+                      <p className="text-xs text-token-secondary">
                         {canAskQA ? "有任何问题都可以问我" : "请先生成今日学习内容"}
                       </p>
                       {canAskQA && (
-                        <p className="text-[10px] text-[#8A8A8E] mt-1">我会结合今日材料为你解答</p>
+                        <p className="type-caption text-token-secondary mt-1">我会结合今日材料为你解答</p>
                       )}
                     </div>
                   )}
@@ -748,7 +791,7 @@ export default function Study() {
                       className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
                       <div className={`flex flex-col gap-1 max-w-[85%] ${msg.type === "user" ? "items-end" : "items-start"}`}>
                         <div className={`px-4 py-3 rounded-2xl text-sm ${
-                          msg.type === "user" ? "bg-[#6E56CF] text-white rounded-br-md" : "liquid-glass text-[#E0E0E5] rounded-bl-md"
+                          msg.type === "user" ? "bg-token-brand text-white rounded-br-md" : "liquid-glass text-token-primary rounded-bl-md"
                         }`}>
                           <MarkdownRenderer content={msg.text} />
                         </div>
@@ -767,23 +810,25 @@ export default function Study() {
                     <div className="flex justify-start">
                       <div className="liquid-glass px-4 py-3 rounded-2xl rounded-bl-md">
                         <div className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "300ms" }} />
+                          <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "300ms" }} />
                         </div>
                       </div>
                     </div>
                   )}
                   <div ref={qaEndRef} />
                 </div>
-                <div className="p-4 border-t border-[rgba(255,255,255,0.05)] flex-shrink-0">
+                <div className="p-4 border-t border-token-surface flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleAskQuestion()}
                       placeholder={qaInputPlaceholder} disabled={!canAskQA}
-                      className="flex-1 px-4 py-2.5 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all disabled:opacity-50" />
+                      className="flex-1 px-4 py-2.5 rounded-xl type-body text-token-primary focus:outline-none transition-all disabled:opacity-50"
+                      style={{ backgroundColor: "var(--surface-hover)", border: "1px solid var(--surface-border-strong)", color: "var(--text-primary)" }}
+                    />
                     <button onClick={handleAskQuestion} disabled={!question.trim() || isAiTyping || !canAskQA}
-                      className="p-2.5 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl transition-colors">
+                      className="p-2.5 bg-token-brand hover:opacity-90 disabled:opacity-40 disabled:text-token-secondary text-white rounded-xl transition-colors">
                       <Send size={16} />
                     </button>
                   </div>
@@ -799,29 +844,29 @@ export default function Study() {
         {showQA && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="lg:hidden fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: 'var(--bg-primary)' }}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(255,255,255,0.05)] flex-shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-token-surface flex-shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-[rgba(110,86,207,0.15)]">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-token-brand-muted">
                   <img src="/ai-avatar.png" alt="AI" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-[#F5F5F7]">AI 学习导师</h3>
-                  <p className="text-[10px] text-[#8A8A8E] truncate max-w-[200px]">{qaContextLabel}</p>
+                  <h3 className="text-sm font-medium text-token-primary">AI 学习导师</h3>
+                  <p className="type-caption text-token-secondary truncate max-w-[200px]">{qaContextLabel}</p>
                 </div>
               </div>
-              <button onClick={() => setShowQA(false)} className="w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
+              <button onClick={() => setShowQA(false)} className="w-8 h-8 rounded-lg hover-surface flex items-center justify-center">
                 <X size={16} />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
               {qaMessages.length === 0 && (
                 <div className="text-center py-10">
-                  <MessageCircle size={32} className="mx-auto mb-3 text-[#8A8A8E]" />
-                  <p className="text-sm text-[#8A8A8E] mb-1">
+                  <MessageCircle size={32} className="mx-auto mb-3 text-token-secondary" />
+                  <p className="text-sm text-token-secondary mb-1">
                     {canAskQA ? "有任何问题都可以问我" : "请先生成今日学习内容"}
                   </p>
                   {canAskQA && (
-                    <p className="text-xs text-[#8A8A8E]">我会结合今日材料为你解答</p>
+                    <p className="text-xs text-token-secondary">我会结合今日材料为你解答</p>
                   )}
                 </div>
               )}
@@ -830,7 +875,7 @@ export default function Study() {
                   className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`flex flex-col gap-1 max-w-[85%] ${msg.type === "user" ? "items-end" : "items-start"}`}>
                     <div className={`px-4 py-3 rounded-2xl text-sm ${
-                      msg.type === "user" ? "bg-[#6E56CF] text-white rounded-br-md" : "liquid-glass text-[#E0E0E5] rounded-bl-md"
+                      msg.type === "user" ? "bg-token-brand text-white rounded-br-md" : "liquid-glass text-token-primary rounded-bl-md"
                     }`}>
                       <MarkdownRenderer content={msg.text} />
                     </div>
@@ -849,23 +894,25 @@ export default function Study() {
                 <div className="flex justify-start">
                   <div className="liquid-glass px-4 py-3 rounded-2xl rounded-bl-md">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#6E56CF] animate-bounce" style={{ animationDelay: "300ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "300ms" }} />
                     </div>
                   </div>
                 </div>
               )}
               <div ref={qaEndRef} />
             </div>
-            <div className="p-4 border-t border-[rgba(255,255,255,0.05)] flex-shrink-0">
+            <div className="p-4 border-t border-token-surface flex-shrink-0">
               <div className="flex items-center gap-2">
                 <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAskQuestion()}
                   placeholder={qaInputPlaceholder} disabled={!canAskQA}
-                  className="flex-1 px-4 py-3 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all disabled:opacity-50" />
+                  className="flex-1 px-4 py-3 rounded-xl type-body text-token-primary focus:outline-none transition-all disabled:opacity-50"
+                  style={{ backgroundColor: "var(--surface-hover)", border: "1px solid var(--surface-border-strong)", color: "var(--text-primary)" }}
+                />
                 <button onClick={handleAskQuestion} disabled={!question.trim() || isAiTyping || !canAskQA}
-                  className="p-3 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl transition-colors">
+                  className="p-3 bg-token-brand hover:opacity-90 disabled:opacity-40 disabled:text-token-secondary text-white rounded-xl transition-colors">
                   <Send size={18} />
                 </button>
               </div>
@@ -874,6 +921,27 @@ export default function Study() {
         )}
       </AnimatePresence>
 
+      <button
+        type="button"
+        className="study-mobile-fab"
+        onClick={() => {
+          if (canAskQA) setShowQA(true);
+          else openOutline();
+        }}
+        aria-label={canAskQA ? "提问" : "今日目录"}
+      >
+        {canAskQA ? (
+          <>
+            <MessageCircle size={18} />
+            <span className="text-sm font-medium">提问</span>
+          </>
+        ) : (
+          <>
+            <Menu size={18} />
+            <span className="text-sm font-medium">目录</span>
+          </>
+        )}
+      </button>
     </div>
   );
 }

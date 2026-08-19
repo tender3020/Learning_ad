@@ -387,7 +387,7 @@ export default function Onboarding() {
                   className="w-full px-4 md:px-5 py-3 md:py-4 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl md:rounded-2xl text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all text-sm md:text-base" />
               </div>
               <div className="mb-4 md:mb-6">
-                <p className="text-[10px] md:text-xs text-[#8A8A8E] uppercase tracking-wider mb-2 md:mb-3">热门学习目标</p>
+                <p className="type-caption md:text-xs text-[#8A8A8E] uppercase tracking-wider mb-2 md:mb-3">热门学习目标</p>
                 <div className="flex flex-wrap gap-1.5 md:gap-2">
                   {suggestedGoals.map((sg) => (
                     <button key={sg} onClick={() => { setSelectedGoal(sg); setGoalInput(sg); }}
@@ -398,7 +398,7 @@ export default function Onboarding() {
                 </div>
               </div>
               <div className="mb-6 md:mb-8">
-                <p className="text-[10px] md:text-xs text-[#8A8A8E] uppercase tracking-wider mb-2 md:mb-3">学习周期</p>
+                <p className="type-caption md:text-xs text-[#8A8A8E] uppercase tracking-wider mb-2 md:mb-3">学习周期</p>
                 <div className="grid grid-cols-5 gap-1.5 md:gap-3">
                   {[7, 14, 30, 60, 90].map((days) => (
                     <button key={days} onClick={() => setTotalDays(days)}
@@ -460,8 +460,8 @@ export default function Onboarding() {
               {/* 进度条 */}
             <div className="w-full mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] md:text-xs text-[#8A8A8E]">能力评估 · 第 {currentQIndex + 1}/{quizQuestions.length} 题</span>
-                <button onClick={handleSkipAssessment} className="text-[10px] md:text-xs text-[#8A8A8E] hover:text-[#F5F5F7] transition-colors">
+                <span className="type-caption md:text-xs text-[#8A8A8E]">能力评估 · 第 {currentQIndex + 1}/{quizQuestions.length} 题</span>
+                <button onClick={handleSkipAssessment} className="type-caption md:text-xs text-[#8A8A8E] hover:text-[#F5F5F7] transition-colors">
                   跳过评估
                 </button>
               </div>
@@ -473,7 +473,7 @@ export default function Onboarding() {
 
             {/* 难度标签 */}
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{
+              <span className="type-caption px-2 py-0.5 rounded-full font-medium" style={{
                 color: DIFFICULTY_COLORS[currentQ.difficulty],
                 background: `${DIFFICULTY_COLORS[currentQ.difficulty]}15`,
               }}>{DIFFICULTY_LABELS[currentQ.difficulty]}</span>
@@ -567,7 +567,7 @@ export default function Onboarding() {
                       transition={{ opacity: { delay: i * 0.05, duration: 0.3 }, scale: { delay: i * 0.05, duration: 0.3 }, rotateY: { delay: i * 0.05, duration: 5, repeat: Infinity, ease: "linear" } }}
                       className="absolute" style={{ transform: `rotateY(${angle}deg) translateZ(${typeof window !== 'undefined' && window.innerWidth < 768 ? '80px' : '120px'})`, transformStyle: "preserve-3d" }}>
                       <div className="w-8 h-10 md:w-12 md:h-16 bg-[rgba(255,255,255,0.9)] rounded-md md:rounded-lg flex items-center justify-center shadow-lg shadow-[rgba(110,86,207,0.3)]">
-                        <span className="text-[10px] md:text-sm font-bold text-[#0A0A0A]">D{i + 1}</span>
+                        <span className="type-caption md:text-sm font-bold text-[#0A0A0A]">D{i + 1}</span>
                       </div>
                     </motion.div>
                   );
@@ -588,7 +588,7 @@ export default function Onboarding() {
                 <motion.div className="h-full bg-gradient-to-r from-[#6E56CF] to-[#A78BFA] rounded-full"
                   initial={{ width: "0%" }} animate={{ width: `${store.generationProgress}%` }} transition={{ duration: 0.5 }} />
               </div>
-              <p className="text-[10px] md:text-xs text-[#8A8A8E] mt-2">{store.generationStage}</p>
+              <p className="type-caption md:text-xs text-[#8A8A8E] mt-2">{store.generationStage}</p>
             </div>
           </motion.div>
         )}
@@ -613,11 +613,11 @@ export default function Onboarding() {
                   <div className="space-y-1">
                     {group.items.map((item) => (
                       <div key={item.dayNumber} className="flex gap-3 px-2 py-2 rounded-lg hover:bg-[rgba(255,255,255,0.03)]">
-                        <span className="text-[10px] text-[#6E56CF] font-medium w-8 flex-shrink-0 pt-0.5">D{item.dayNumber}</span>
+                        <span className="type-caption text-[#6E56CF] font-medium w-8 flex-shrink-0 pt-0.5">D{item.dayNumber}</span>
                         <div className="min-w-0">
                           <p className="text-sm text-[#F5F5F7] font-medium truncate">{item.title}</p>
                           {item.learningObjective && (
-                            <p className="text-[10px] text-[#8A8A8E] truncate mt-0.5">{item.learningObjective}</p>
+                            <p className="type-caption text-[#8A8A8E] truncate mt-0.5">{item.learningObjective}</p>
                           )}
                         </div>
                       </div>
@@ -667,7 +667,7 @@ export default function Onboarding() {
               评估得分 {assessmentScore}/100 · 共 {totalDays} 天
             </motion.p>
             <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
-              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => navigate("/")}
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => navigate("/today")}
               className="inline-flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-2xl font-medium text-base md:text-lg transition-colors brand-glow">
               进入学习看板 <ArrowRight size={20} />
             </motion.button>
@@ -691,7 +691,7 @@ export default function Onboarding() {
             </motion.p>
             <div className="flex flex-col sm:flex-row gap-3">
               <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => navigate("/")}
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => navigate("/today")}
                 className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl font-medium text-sm transition-colors">
                 管理现有计划 <ArrowRight size={16} />
               </motion.button>

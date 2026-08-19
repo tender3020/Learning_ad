@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   BookOpen,
   Focus,
@@ -5,6 +6,7 @@ import {
   Minus,
   Plus,
   AlignJustify,
+  Type,
 } from "lucide-react";
 import {
   READING_MODE_LABELS,
@@ -40,18 +42,10 @@ export default function ReadingToolbar({
   onOpenToc,
   showTocButton = false,
 }: ReadingToolbarProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
   return (
     <div className="reading-toolbar">
-      <button
-        type="button"
-        className="reading-toolbar__btn"
-        onClick={onCycleMode}
-        title="切换阅读模式"
-      >
-        <BookOpen size={14} />
-        <span className="reading-toolbar__label">{READING_MODE_LABELS[mode]}</span>
-      </button>
-
       <div className="reading-toolbar__group">
         <button
           type="button"
@@ -76,26 +70,6 @@ export default function ReadingToolbar({
         </button>
       </div>
 
-      <button
-        type="button"
-        className={`reading-toolbar__btn reading-toolbar__btn--icon ${lineHeight === "relaxed" ? "reading-toolbar__btn--active" : ""}`}
-        onClick={onToggleLineHeight}
-        title="切换行距"
-        aria-label="切换行距"
-      >
-        <AlignJustify size={14} />
-      </button>
-
-      <button
-        type="button"
-        className={`reading-toolbar__btn reading-toolbar__btn--icon ${focusMode ? "reading-toolbar__btn--active" : ""}`}
-        onClick={onToggleFocus}
-        title="专注模式"
-        aria-label="专注模式"
-      >
-        <Focus size={14} />
-      </button>
-
       {showTocButton && onOpenToc && (
         <button
           type="button"
@@ -107,6 +81,43 @@ export default function ReadingToolbar({
           <List size={14} />
         </button>
       )}
+
+      <div className="reading-toolbar__more ml-auto">
+        <button
+          type="button"
+          className={`reading-toolbar__btn ${moreOpen ? "reading-toolbar__btn--active" : ""}`}
+          onClick={() => setMoreOpen((v) => !v)}
+          title="阅读设置"
+          aria-expanded={moreOpen}
+        >
+          <Type size={14} />
+          <span className="reading-toolbar__label">Aa</span>
+        </button>
+        {moreOpen && (
+          <div className="reading-toolbar__menu" role="menu">
+            <button type="button" className="reading-toolbar__btn w-full justify-start" onClick={onCycleMode}>
+              <BookOpen size={14} />
+              {READING_MODE_LABELS[mode]}
+            </button>
+            <button
+              type="button"
+              className={`reading-toolbar__btn w-full justify-start ${lineHeight === "relaxed" ? "reading-toolbar__btn--active" : ""}`}
+              onClick={onToggleLineHeight}
+            >
+              <AlignJustify size={14} />
+              {lineHeight === "relaxed" ? "宽松行距" : "标准行距"}
+            </button>
+            <button
+              type="button"
+              className={`reading-toolbar__btn w-full justify-start ${focusMode ? "reading-toolbar__btn--active" : ""}`}
+              onClick={onToggleFocus}
+            >
+              <Focus size={14} />
+              专注模式
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

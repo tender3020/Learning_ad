@@ -1,6 +1,5 @@
-import { type RefObject, useMemo } from "react";
+import { type RefObject, useMemo, useState } from "react";
 import { CheckCircle, Play, Lock, ChevronLeft, ChevronDown, ChevronRight } from "lucide-react";
-import { useState } from "react";
 
 export type OutlineDayItem = {
   dayNumber: number;
@@ -29,24 +28,22 @@ export function StudyDayOutlineNav({
         type="button"
         onClick={() => onSelectDay(currentDay - 1)}
         disabled={currentDay <= 1}
-        className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-30 transition-all"
+        className="p-2 rounded-lg hover-surface disabled:opacity-30 transition-all"
         aria-label="上一日"
       >
         <ChevronLeft size={18} />
       </button>
-      <span className="text-sm text-[#8A8A8E]">
+      <span className="type-body text-token-secondary">
         {currentDay} / {totalDays}
       </span>
       <button
         type="button"
         onClick={() => onSelectDay(currentDay + 1)}
         disabled={currentDay >= totalDays}
-        className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-30 transition-all"
+        className="p-2 rounded-lg hover-surface disabled:opacity-30 transition-all"
         aria-label="下一日"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+        <ChevronRight size={18} />
       </button>
     </div>
   );
@@ -68,39 +65,42 @@ function DayRow({
   const py = compact ? "py-2.5" : "py-2.5";
   const isActive = item.dayNumber === currentDay;
   const isCompleted = item.dayNumber < currentDay;
+  const phaseOrder = Math.min(Math.max(item.phaseOrder || 1, 1), 6);
 
   return (
     <button
       ref={isActive ? activeItemRef : undefined}
       type="button"
       onClick={() => onSelectDay(item.dayNumber)}
-      className={`w-full flex items-center gap-3 px-3 ${py} rounded-xl text-left transition-all ${
-        isActive
-          ? "bg-[rgba(110,86,207,0.15)] border border-[rgba(110,86,207,0.3)]"
-          : "hover:bg-[rgba(255,255,255,0.03)] border border-transparent"
+      className={`w-full flex items-center gap-3 px-3 ${py} rounded-xl text-left transition-all border border-transparent relative ${
+        isActive ? "bg-token-brand-muted" : "hover-surface"
       }`}
     >
+      {isActive && (
+        <span
+          className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full"
+          style={{ backgroundColor: `var(--phase-${phaseOrder})` }}
+        />
+      )}
       <div
         className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
           isCompleted
-            ? "bg-[rgba(52,199,89,0.2)]"
+            ? "bg-[color-mix(in_srgb,var(--color-success)_20%,transparent)]"
             : isActive
-              ? "bg-[rgba(110,86,207,0.2)]"
-              : "bg-[rgba(255,255,255,0.05)]"
+              ? "bg-token-brand-muted"
+              : "bg-[var(--surface-hover)]"
         }`}
       >
         {isCompleted ? (
-          <CheckCircle size={14} className="text-[#34C759]" />
+          <CheckCircle size={14} style={{ color: "var(--color-success)" }} />
         ) : isActive ? (
-          <Play size={12} className="text-[#6E56CF]" />
+          <Play size={12} className="text-token-brand" />
         ) : (
-          <Lock size={12} className="text-[#8A8A8E]" />
+          <Lock size={12} className="text-token-secondary" />
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <p
-          className={`text-sm font-medium truncate ${isActive ? "text-[#F5F5F7]" : "text-[#8A8A8E]"}`}
-        >
+        <p className={`type-body font-medium truncate ${isActive ? "text-token-primary" : "text-token-secondary"}`}>
           D{item.dayNumber}: {item.title}
         </p>
       </div>
@@ -167,19 +167,19 @@ export default function StudyDayOutline({
         const containsActive = group.items.some((i) => i.dayNumber === currentDay);
 
         return (
-          <div key={key} className="rounded-xl border border-[rgba(255,255,255,0.06)] overflow-hidden">
+          <div key={key} className="rounded-xl border border-token-surface overflow-hidden">
             <button
               type="button"
               onClick={() => togglePhase(key)}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors ${
+              className={`w-full flex items-center gap-2 px-3 py-2 text-left type-caption font-medium transition-colors ${
                 containsActive
-                  ? "bg-[rgba(110,86,207,0.12)] text-[#A78BFA]"
-                  : "bg-[rgba(255,255,255,0.02)] text-[#8A8A8E] hover:text-[#F5F5F7]"
+                  ? "bg-token-brand-muted text-token-brand-light"
+                  : "text-token-secondary hover:text-token-primary"
               }`}
             >
               {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
               <span className="truncate">{group.phaseName}</span>
-              <span className="ml-auto text-[10px] opacity-70">{group.items.length} 天</span>
+              <span className="ml-auto type-caption opacity-70">{group.items.length} 天</span>
             </button>
             {!isCollapsed && (
               <div className="space-y-1 p-1 pt-0">

@@ -186,7 +186,7 @@ export default function Settings() {
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-sm md:text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{displayName}</h2>
-              <p className="text-[11px] md:text-sm" style={{ color: 'var(--text-secondary)' }}>{user?.phone?.replace(/(\d{3})(\d{4})(\d{4})/, "$1****$3") || "未绑定手机号"}</p>
+              <p className="type-caption md:text-sm" style={{ color: 'var(--text-secondary)' }}>{user?.phone?.replace(/(\d{3})(\d{4})(\d{4})/, "$1****$3") || "未绑定手机号"}</p>
             </div>
             <button onClick={() => { setEditName(user?.name || ""); setActiveModal("profile"); }}
               className="p-1.5 md:p-2 rounded-lg bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.08)] transition-all flex-shrink-0">
@@ -197,7 +197,7 @@ export default function Settings() {
 
         {/* Account Section */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mb-3 md:mb-6">
-          <h3 className="text-[9px] md:text-xs font-medium uppercase tracking-wider mb-1.5 md:mb-3 px-1" style={{ color: 'var(--text-secondary)' }}>
+          <h3 className="type-caption md:text-xs font-medium uppercase tracking-wider mb-1.5 md:mb-3 px-1" style={{ color: 'var(--text-secondary)' }}>
             账户
           </h3>
           <div className="liquid-glass rounded-xl md:rounded-2xl overflow-hidden">
@@ -209,7 +209,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>个人信息</p>
-                <p className="text-[9px] md:text-xs" style={{ color: 'var(--text-secondary)' }}>管理你的姓名和头像</p>
+                <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>管理你的姓名和头像</p>
               </div>
               <ChevronRight size={14} style={{ color: 'var(--text-secondary)' }} className="flex-shrink-0" />
             </button>
@@ -222,7 +222,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>通知设置</p>
-                <p className="text-[9px] md:text-xs" style={{ color: 'var(--text-secondary)' }}>学习提醒和推送</p>
+                <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>学习提醒和推送</p>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 {(settings.notifyStudyReminder || settings.notifyNewContent) && (
@@ -240,7 +240,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>隐私安全</p>
-                <p className="text-[9px] md:text-xs" style={{ color: 'var(--text-secondary)' }}>账户安全和数据隐私</p>
+                <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>账户安全和数据隐私</p>
               </div>
               <ChevronRight size={14} style={{ color: 'var(--text-secondary)' }} className="flex-shrink-0" />
             </button>
@@ -249,7 +249,7 @@ export default function Settings() {
 
         {/* Preferences Section */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mb-3 md:mb-6">
-          <h3 className="text-[9px] md:text-xs font-medium uppercase tracking-wider mb-1.5 md:mb-3 px-1" style={{ color: 'var(--text-secondary)' }}>
+          <h3 className="type-caption md:text-xs font-medium uppercase tracking-wider mb-1.5 md:mb-3 px-1" style={{ color: 'var(--text-secondary)' }}>
             偏好
           </h3>
           <div className="liquid-glass rounded-xl md:rounded-2xl overflow-hidden">
@@ -261,7 +261,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>主题外观</p>
-                <p className="text-[9px] md:text-xs" style={{ color: 'var(--text-secondary)' }}>{settings.theme === "dark" ? "深色模式" : "浅色模式"}</p>
+                <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>{settings.theme === "dark" ? "深色模式" : "浅色模式"}</p>
               </div>
               <ChevronRight size={14} style={{ color: 'var(--text-secondary)' }} className="flex-shrink-0" />
             </button>
@@ -274,7 +274,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>语言</p>
-                <p className="text-[9px] md:text-xs" style={{ color: 'var(--text-secondary)' }}>简体中文</p>
+                <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>简体中文</p>
               </div>
               <ChevronRight size={14} style={{ color: 'var(--text-secondary)' }} className="flex-shrink-0" />
             </button>
@@ -290,7 +290,7 @@ export default function Settings() {
             </div>
             <div>
               <p className="text-xs md:text-sm font-medium text-[#FF3B30]">退出登录</p>
-              <p className="text-[9px] md:text-xs" style={{ color: 'var(--text-secondary)' }}>退出当前账户</p>
+              <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>退出当前账户</p>
             </div>
           </button>
         </motion.div>
@@ -342,7 +342,7 @@ export default function Settings() {
                     <Clock size={16} className="text-[#6E56CF]" />
                     <div>
                       <p className="text-sm" style={{ color: 'var(--text-primary)' }}>学习提醒</p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>每日学习提醒通知</p>
+                      <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>每日学习提醒通知</p>
                     </div>
                   </div>
                   <Switch checked={settings.notifyStudyReminder} onCheckedChange={() => handleNotifyToggle("notifyStudyReminder")} />
@@ -353,7 +353,7 @@ export default function Settings() {
                     <Smartphone size={16} className="text-[#34C759]" />
                     <div>
                       <p className="text-sm" style={{ color: 'var(--text-primary)' }}>新内容推送</p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>学习内容生成完成时通知</p>
+                      <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>学习内容生成完成时通知</p>
                     </div>
                   </div>
                   <Switch checked={settings.notifyNewContent} onCheckedChange={() => handleNotifyToggle("notifyNewContent")} />
@@ -364,7 +364,7 @@ export default function Settings() {
                     <Mail size={16} className="text-[#A78BFA]" />
                     <div>
                       <p className="text-sm" style={{ color: 'var(--text-primary)' }}>邮件通知</p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>学习周报和进度报告（即将上线）</p>
+                      <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>学习周报和进度报告（即将上线）</p>
                     </div>
                   </div>
                   <Switch disabled checked={false} />
@@ -372,7 +372,7 @@ export default function Settings() {
 
                 {/* 通知说明 */}
                 <div className="p-3 rounded-xl border" style={{ backgroundColor: 'rgba(110,86,207,0.05)', borderColor: 'rgba(110,86,207,0.1)' }}>
-                  <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  <p className="type-caption leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                     通知通过浏览器推送发送。开启后，系统会在你设置的学习时间发送提醒。
                     请确保浏览器允许通知权限。
                   </p>
@@ -394,7 +394,7 @@ export default function Settings() {
                   </div>
                   <div className="flex-1 text-left">
                     <p className="text-sm" style={{ color: 'var(--text-primary)' }}>深色模式</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>护眼的暗色背景</p>
+                    <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>护眼的暗色背景</p>
                   </div>
                   {settings.theme === "dark" && <Check size={18} className="text-[#6E56CF]" />}
                 </button>
@@ -407,7 +407,7 @@ export default function Settings() {
                   </div>
                   <div className="flex-1 text-left">
                     <p className="text-sm" style={{ color: 'var(--text-primary)' }}>浅色模式</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>明亮的阅读体验</p>
+                    <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>明亮的阅读体验</p>
                   </div>
                   {settings.theme === "light" && <Check size={18} className="text-[#6E56CF]" />}
                 </button>
@@ -423,21 +423,21 @@ export default function Settings() {
                   <Eye size={16} className="text-[#6E56CF] flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm mb-1" style={{ color: 'var(--text-primary)' }}>数据可见性</p>
-                    <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>你的学习数据仅存储在你的账户下，不会与其他用户共享。AI 问答内容仅用于提供更好的学习建议。</p>
+                    <p className="type-caption leading-relaxed" style={{ color: 'var(--text-secondary)' }}>你的学习数据仅存储在你的账户下，不会与其他用户共享。AI 问答内容仅用于提供更好的学习建议。</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-xl border" style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
                   <Database size={16} className="text-[#34C759] flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm mb-1" style={{ color: 'var(--text-primary)' }}>数据存储</p>
-                    <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>所有学习数据存储在加密的数据库中。你的手机号仅用于登录认证，不会用于其他用途。</p>
+                    <p className="type-caption leading-relaxed" style={{ color: 'var(--text-secondary)' }}>所有学习数据存储在加密的数据库中。你的手机号仅用于登录认证，不会用于其他用途。</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-xl border" style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
                   <FileText size={16} className="text-[#FF9500] flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm mb-1" style={{ color: 'var(--text-primary)' }}>AI 使用说明</p>
-                    <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>学习内容由 DeepSeek AI 生成，仅供学习参考。问答交互数据可能被用于改进 AI 回复质量。</p>
+                    <p className="type-caption leading-relaxed" style={{ color: 'var(--text-secondary)' }}>学习内容由 DeepSeek AI 生成，仅供学习参考。问答交互数据可能被用于改进 AI 回复质量。</p>
                   </div>
                 </div>
               </div>
@@ -452,7 +452,7 @@ export default function Settings() {
                   <span className="text-lg">CN</span>
                   <div className="flex-1">
                     <p className="text-sm" style={{ color: 'var(--text-primary)' }}>简体中文</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>当前语言</p>
+                    <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>当前语言</p>
                   </div>
                   <Check size={18} className="text-[#6E56CF]" />
                 </div>
@@ -460,7 +460,7 @@ export default function Settings() {
                   <span className="text-lg">EN</span>
                   <div className="flex-1">
                     <p className="text-sm" style={{ color: 'var(--text-primary)' }}>English</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>即将上线</p>
+                    <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>即将上线</p>
                   </div>
                 </div>
               </div>
