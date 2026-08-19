@@ -13,7 +13,7 @@ export const env = {
   databaseUrl: required("DATABASE_URL"),
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   deepseekApiBase: process.env.DEEPSEEK_API_BASE ?? "https://api.deepseek.com",
-  deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
+  deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash",
   jwtSecret: process.env.JWT_SECRET ?? "yizhi_default_secret",
   // 火山引擎 TTS（新版控制台用 API Key，旧版用 AppId + AccessKey）
   volcengineTtsApiKey: process.env.VOLCENGINE_TTS_API_KEY ?? "",

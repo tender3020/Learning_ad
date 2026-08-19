@@ -5,6 +5,7 @@ import { trpc } from "@/providers/trpc";
 import { useLearningStore } from "@/stores/useLearningStore";
 import { aiService } from "@/services/aiService";
 import { TYPE_LABELS, type LearningType } from "@shared/typeEngine";
+import type { OutlineItem } from "@shared/outlineTypes";
 import WireframeSphere from "@/components/3d/WireframeSphere";
 import {
   Sparkles,
@@ -23,7 +24,7 @@ import {
 } from "lucide-react";
 
 type Difficulty = "basic" | "intermediate" | "advanced" | "expert";
-type Step = "welcome" | "input" | "detecting_type" | "generating_quiz" | "assessing" | "generating_plan" | "complete" | "limit";
+type Step = "welcome" | "input" | "detecting_type" | "generating_quiz" | "assessing" | "generating_plan" | "outline_preview" | "complete" | "limit";
 
 interface QuizQuestion {
   id?: number;
@@ -80,6 +81,9 @@ export default function Onboarding() {
   const [assessmentScore, setAssessmentScore] = useState(0);
   const [quizError, setQuizError] = useState("");
   const [planError, setPlanError] = useState("");
+  const [pendingPlanId, setPendingPlanId] = useState<number | null>(null);
+  const [pendingOutline, setPendingOutline] = useState<OutlineItem[]>([]);
+  const [isSavingOutline, setIsSavingOutline] = useState(false);
 
   // 学习类型检测
   const [detectedType, setDetectedType] = useState<LearningType>("abstract_logic");
@@ -228,23 +232,11 @@ export default function Onboarding() {
         throw new Error("大纲生成结果为空，请重试");
       }
 
-      store.setGenerationProgress(80, "保存学习计划...");
-      await saveOutlineMut.mutateAsync({
-        planId,
-        outline: outline.map((item) => ({
-          dayNumber: item.dayNumber, title: item.title, goal: item.goal,
-          keywords: item.keywords, estimatedMinutes: item.estimatedMinutes,
-        })),
-      });
-      console.log("[generatePlan] 大纲保存成功");
-
-      store.setGenerationProgress(100, "计划生成完成！");
-      store.setCurrentPlan(planId, finalGoal, finalGoal, totalDays);
-      store.setOutline(outline);
-      store.setCurrentDay(1);
+      store.setGenerationProgress(100, "大纲生成完成，请确认");
       store.setStreaming(false);
-      console.log("[generatePlan] 流程完成，进入 complete 状态");
-      setStep("complete");
+      setPendingPlanId(planId);
+      setPendingOutline(outline);
+      setStep("outline_preview");
     } catch (error) {
       console.error("[generatePlan] 创建计划失败:", error);
       const errMsg = error instanceof Error ? error.message : "计划生成失败，请重试";
@@ -253,6 +245,72 @@ export default function Onboarding() {
       setStep("assessing");
     }
   };
+
+  const regenerateOutlineOnly = async () => {
+    setStep("generating_plan");
+    store.setStreaming(true);
+    store.setGenerationProgress(50, "重新生成学习大纲...");
+    setPlanError("");
+    try {
+      const outline = await aiService.generateOutline(
+        finalGoal,
+        totalDays,
+        detectedType,
+        skillLevel,
+      );
+      if (outline.length === 0) throw new Error("大纲生成结果为空");
+      setPendingOutline(outline);
+      store.setGenerationProgress(100, "大纲已更新");
+      store.setStreaming(false);
+      setStep("outline_preview");
+    } catch (error) {
+      setPlanError(error instanceof Error ? error.message : "重新生成失败");
+      store.setStreaming(false);
+      setStep("outline_preview");
+    }
+  };
+
+  const handleConfirmOutline = async () => {
+    if (!pendingPlanId || pendingOutline.length === 0) return;
+    setIsSavingOutline(true);
+    setPlanError("");
+    try {
+      await saveOutlineMut.mutateAsync({
+        planId: pendingPlanId,
+        outline: pendingOutline.map((item) => ({
+          dayNumber: item.dayNumber,
+          title: item.title,
+          goal: item.goal,
+          keywords: item.keywords,
+          estimatedMinutes: item.estimatedMinutes,
+          phaseName: item.phaseName,
+          phaseOrder: item.phaseOrder,
+          difficulty: item.difficulty,
+          prerequisites: item.prerequisites,
+          learningObjective: item.learningObjective,
+        })),
+      });
+      store.setCurrentPlan(pendingPlanId, finalGoal, finalGoal, totalDays);
+      store.setOutline(pendingOutline);
+      store.setCurrentDay(1);
+      setStep("complete");
+    } catch (error) {
+      setPlanError(error instanceof Error ? error.message : "保存大纲失败，请重试");
+    } finally {
+      setIsSavingOutline(false);
+    }
+  };
+
+  const outlinePhaseGroups = pendingOutline.reduce<
+    Array<{ phaseName: string; phaseOrder: number; items: OutlineItem[] }>
+  >((acc, item) => {
+    const phaseName = item.phaseName || "学习阶段";
+    const phaseOrder = item.phaseOrder ?? 0;
+    const existing = acc.find((g) => g.phaseName === phaseName && g.phaseOrder === phaseOrder);
+    if (existing) existing.items.push(item);
+    else acc.push({ phaseName, phaseOrder, items: [item] });
+    return acc;
+  }, []).sort((a, b) => a.phaseOrder - b.phaseOrder);
 
   // ============ 跳过评估 ============
   const handleSkipAssessment = async () => {
@@ -531,6 +589,62 @@ export default function Onboarding() {
                   initial={{ width: "0%" }} animate={{ width: `${store.generationProgress}%` }} transition={{ duration: 0.5 }} />
               </div>
               <p className="text-[10px] md:text-xs text-[#8A8A8E] mt-2">{store.generationStage}</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ====== OUTLINE PREVIEW ====== */}
+        {step === "outline_preview" && (
+          <motion.div key="outline_preview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="relative z-10 w-full max-w-2xl px-3 md:px-6 flex flex-col max-h-[85vh]">
+            <div className="text-center mb-4">
+              <h2 className="text-xl md:text-2xl font-semibold text-[#F5F5F7] mb-1">确认你的 {totalDays} 天学习大纲</h2>
+              <p className="text-sm text-[#8A8A8E]">按阶段循序渐进，确认后开始学习</p>
+            </div>
+            {planError && (
+              <div className="mb-3 p-3 rounded-xl bg-[rgba(255,59,48,0.1)] border border-[rgba(255,59,48,0.2)] text-xs text-[#FF3B30]">
+                {planError}
+              </div>
+            )}
+            <div className="flex-1 overflow-y-auto rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] p-3 mb-4 space-y-3">
+              {outlinePhaseGroups.map((group) => (
+                <div key={`${group.phaseOrder}-${group.phaseName}`}>
+                  <p className="text-xs font-medium text-[#A78BFA] mb-2 px-1">{group.phaseName}</p>
+                  <div className="space-y-1">
+                    {group.items.map((item) => (
+                      <div key={item.dayNumber} className="flex gap-3 px-2 py-2 rounded-lg hover:bg-[rgba(255,255,255,0.03)]">
+                        <span className="text-[10px] text-[#6E56CF] font-medium w-8 flex-shrink-0 pt-0.5">D{item.dayNumber}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm text-[#F5F5F7] font-medium truncate">{item.title}</p>
+                          {item.learningObjective && (
+                            <p className="text-[10px] text-[#8A8A8E] truncate mt-0.5">{item.learningObjective}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 pb-4">
+              <button
+                type="button"
+                onClick={() => void regenerateOutlineOnly()}
+                disabled={isSavingOutline}
+                className="flex-1 px-4 py-3 rounded-xl text-sm text-[#8A8A8E] border border-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.05)] transition-colors disabled:opacity-50"
+              >
+                重新生成
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmOutline}
+                disabled={isSavingOutline}
+                className="flex-[2] inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl font-medium text-sm transition-colors disabled:opacity-50"
+              >
+                {isSavingOutline ? <Loader2 size={16} className="animate-spin" /> : null}
+                确认并开始学习
+                {!isSavingOutline && <ArrowRight size={16} />}
+              </button>
             </div>
           </motion.div>
         )}

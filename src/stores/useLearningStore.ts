@@ -6,6 +6,11 @@ interface OutlineItem {
   goal: string;
   keywords: string;
   estimatedMinutes: number;
+  phaseName?: string | null;
+  phaseOrder?: number | null;
+  difficulty?: "basic" | "intermediate" | "advanced" | null;
+  prerequisites?: string | null;
+  learningObjective?: string | null;
 }
 
 // 持久化数据结构

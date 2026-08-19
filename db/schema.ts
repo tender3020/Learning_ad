@@ -71,6 +71,11 @@ export const learningOutline = mysqlTable("learning_outline", {
   goal: text("goal"),
   keywords: text("keywords"),
   estimatedMinutes: int("estimated_minutes").default(30),
+  phaseName: varchar("phase_name", { length: 255 }),
+  phaseOrder: int("phase_order"),
+  difficulty: mysqlEnum("difficulty", ["basic", "intermediate", "advanced"]),
+  prerequisites: text("prerequisites"),
+  learningObjective: text("learning_objective"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

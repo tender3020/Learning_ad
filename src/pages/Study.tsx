@@ -15,6 +15,8 @@ import ReadingToolbar from "@/components/reading/ReadingToolbar";
 import ReadingToc from "@/components/reading/ReadingToc";
 import MobileSideDrawer from "@/components/ui/MobileSideDrawer";
 import StudyDayOutline, { StudyDayOutlineNav } from "@/components/study/StudyDayOutline";
+import { buildDayContentPrompt } from "@shared/contentPrompt";
+import type { LearningType } from "@shared/typeEngine";
 import {
   Send,
   Loader2,
@@ -234,18 +236,33 @@ export default function Study() {
     store.setStreaming(true);
     setError("");
 
-    const prompt = `请为第${store.currentDay}天的学习目标生成详细的学习内容。
-
-学习主题：${todayItem.title}
-学习目标：${todayItem.goal}
-${todayItem.keywords ? `关键词：${todayItem.keywords}` : ""}
-
-请用中文输出，使用 Markdown 格式，包含：
-1. 知识点详细讲解
-2. 代码示例（如适用）
-3. 实际应用场景
-4. 练习题目
-5. 小结`;
+    const prevDayItem =
+      store.currentDay > 1 ? effectiveOutline[store.currentDay - 2] : undefined;
+    const prompt = buildDayContentPrompt({
+      planGoal: outlineData?.goal || store.goal || todayItem.title,
+      dayNumber: store.currentDay,
+      totalDays: store.totalDays,
+      today: {
+        title: todayItem.title,
+        goal: todayItem.goal || "",
+        keywords: todayItem.keywords || "",
+        phaseName: todayItem.phaseName ?? undefined,
+        phaseOrder: todayItem.phaseOrder ?? undefined,
+        difficulty: todayItem.difficulty ?? undefined,
+        prerequisites: todayItem.prerequisites ?? undefined,
+        learningObjective: todayItem.learningObjective ?? undefined,
+        estimatedMinutes: todayItem.estimatedMinutes ?? 30,
+      },
+      prevDay: prevDayItem
+        ? {
+            title: prevDayItem.title,
+            goal: prevDayItem.goal || "",
+            learningObjective: prevDayItem.learningObjective ?? undefined,
+          }
+        : undefined,
+      learningType: (planLearningType as LearningType) || "abstract_logic",
+      skillLevel: assessmentResult?.skillLevel || "l1",
+    });
 
     // 获取 skillLevel 和 learningType（未评估默认零基础 l1）
     const skillLevel = assessmentResult?.skillLevel || "l1";

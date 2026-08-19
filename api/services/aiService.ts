@@ -3,18 +3,14 @@ import {
   getTypeDetectionPrompt,
   parseTypeFromAIResponse,
   getTypeSystemPrompt,
-  getTypeOutlinePrompt,
   getTypeAssessmentPrompt,
 } from "@shared/typeEngine";
+import { allocatePhases, type AllocatedPhase } from "@shared/outlinePhases";
+import { validateOutline } from "@shared/outlineValidation";
+import type { OutlineItem } from "@shared/outlineTypes";
 import { chatCompletion } from "../lib/deepseek";
 
-export type OutlineItem = {
-  dayNumber: number;
-  title: string;
-  goal: string;
-  keywords: string;
-  estimatedMinutes: number;
-};
+export type { OutlineItem } from "@shared/outlineTypes";
 
 export type AssessmentQuestion = {
   questionIndex: number;
@@ -66,96 +62,222 @@ export async function generateOutline(
   learningType: LearningType = "abstract_logic",
   skillLevel: string = "l1",
 ): Promise<OutlineItem[]> {
-  const systemPrompt = getTypeOutlinePrompt(learningType, goal, totalDays, skillLevel);
+  const phases = allocatePhases(learningType, totalDays);
+  let outline = await expandAllPhasesSequential(goal, learningType, skillLevel, phases);
+
+  let validation = validateOutline(outline, totalDays);
+  if (!validation.valid) {
+    console.warn("[generateOutline] 校验未通过，重试:", validation.errors.join("; "));
+    outline = await expandAllPhasesSequential(goal, learningType, skillLevel, phases, 0.35);
+    validation = validateOutline(outline, totalDays);
+    if (!validation.valid) {
+      console.warn("[generateOutline] 重试后仍有问题:", validation.errors.join("; "));
+    }
+  }
+
+  if (outline.length === 0) {
+    throw new Error("大纲生成失败：AI 未返回有效数据，请重试");
+  }
+
+  return outline.slice(0, totalDays);
+}
+
+async function expandAllPhasesSequential(
+  goal: string,
+  learningType: LearningType,
+  skillLevel: string,
+  phases: AllocatedPhase[],
+  temperature = 0.4,
+): Promise<OutlineItem[]> {
+  const phaseResults: OutlineItem[][] = [];
+  let prevLastTitle: string | undefined;
+
+  for (const phase of phases) {
+    const items = await expandPhaseOutline(
+      goal,
+      learningType,
+      skillLevel,
+      phase,
+      prevLastTitle,
+      temperature,
+    );
+    phaseResults.push(items);
+    if (items.length > 0) prevLastTitle = items[items.length - 1]?.title;
+  }
+
+  return mergePhaseOutlines(phases, phaseResults, phases.reduce((s, p) => s + p.dayCount, 0));
+}
+
+function mergePhaseOutlines(
+  phases: AllocatedPhase[],
+  phaseResults: OutlineItem[][],
+  totalDays: number,
+): OutlineItem[] {
+  const flat = phaseResults.flat();
+  const byDay = new Map<number, OutlineItem>();
+  for (const item of flat) {
+    byDay.set(item.dayNumber, item);
+  }
+
+  const merged: OutlineItem[] = [];
+  for (let day = 1; day <= totalDays; day++) {
+    const existing = byDay.get(day);
+    const phase = phases.find((p) => day >= p.startDay && day <= p.endDay);
+    if (existing) {
+      merged.push({
+        ...existing,
+        phaseName: existing.phaseName ?? phase?.name,
+        phaseOrder: existing.phaseOrder ?? phase?.order,
+        difficulty: existing.difficulty ?? phase?.difficulty,
+      });
+    } else if (phase) {
+      merged.push({
+        dayNumber: day,
+        title: `${phase.name}：${phase.topicHints[0]}`,
+        goal: phase.goal,
+        keywords: phase.topicHints.join(", "),
+        estimatedMinutes: 30,
+        phaseName: phase.name,
+        phaseOrder: phase.order,
+        difficulty: phase.difficulty,
+        learningObjective: phase.goal,
+        prerequisites: day > 1 ? String(day - 1) : undefined,
+      });
+    }
+  }
+  return merged;
+}
+
+async function expandPhaseOutline(
+  goal: string,
+  learningType: LearningType,
+  skillLevel: string,
+  phase: AllocatedPhase,
+  prevPhaseLastTitle?: string,
+  temperature = 0.4,
+): Promise<OutlineItem[]> {
+  const prevHint = prevPhaseLastTitle
+    ? `\n上一阶段最后一天主题：「${prevPhaseLastTitle}」。本阶段第 ${phase.startDay} 天应在此基础上递进，不要重复相同主题。`
+    : "";
+  const dayRange =
+    phase.dayCount === 1
+      ? `第 ${phase.startDay} 天（仅 1 天）`
+      : `第 ${phase.startDay} 至 ${phase.endDay} 天（共 ${phase.dayCount} 天）`;
 
   const response = await chatCompletion({
     messages: [
       {
         role: "system",
-        content: `${systemPrompt}
+        content: `你是课程大纲设计专家。为学习目标「${goal}」展开一个学习阶段的大纲。
+学习类型：${learningType}，学习者水平：${skillLevel}。
 
-【极其重要】请严格按以下 JSON 格式返回，只返回 JSON 数组，不要 markdown 代码块，不要任何其他文字：
-[
-  {"dayNumber": 1, "title": "具体学习主题A", "goal": "当天学习目标", "keywords": "关键词1, 关键词2", "estimatedMinutes": 30},
-  {"dayNumber": 2, "title": "具体学习主题B", "goal": "当天学习目标", "keywords": "关键词3, 关键词4", "estimatedMinutes": 35}
-]
+【输出格式】只返回 JSON 数组，不要 markdown 代码块：
+[{"dayNumber": ${phase.startDay}, "title": "具体主题", "goal": "当日目标", "keywords": "词1, 词2", "estimatedMinutes": 30, "learningObjective": "可测量的当日目标", "prerequisites": "前置天编号", "phaseName": "${phase.name}", "phaseOrder": ${phase.order}, "difficulty": "${phase.difficulty}"}]
 
-【严格要求 - 必须遵守】
-1. 每天的 title 必须是**不同的**具体主题，绝对不能重复或相似
-2. title 禁止写成笼统的目标本身（如目标是"学英语"，标题不能是"学习英语""继续学英语"，必须是"机场问路对话""过去时态用法"等具体主题）
-3. 相邻两天的主题要有明显差异，不要只是换了个编号
-4. 大纲要循序渐进，难度与学习者的等级匹配
-5. estimatedMinutes 在 20-60 之间
-6. 必须返回完整的 ${totalDays} 天大纲，不能省略
-
-【错误示例】（这些标题是错误的，不要输出）
-- "学习英语第1天" / "学习英语第2天" — 太笼统
-- "基础词汇" / "基础词汇2" — 重复
-- "继续学习" / "深入学习" — 不具体
-
-【正确示例】（目标="学英语"时）
-- D1: "机场入境与海关对话"
-- D2: "酒店入住与问路表达"
-- D3: "餐厅点餐与食物词汇"`,
+【要求】
+1. 必须输出恰好 ${phase.dayCount} 条，dayNumber 从 ${phase.startDay} 到 ${phase.endDay}
+2. title 必须具体唯一，禁止「第N天学习」「继续学习」等笼统标题
+3. 相邻天主题递进，同一阶段内由浅入深
+4. prerequisites 填写前置 dayNumber（逗号分隔）或前置知识点短语`,
       },
       {
         role: "user",
-        content: `请为「${goal}」制定一个 ${totalDays} 天的学习大纲。学习类型：${learningType}，水平：${skillLevel}`,
+        content: `阶段「${phase.name}」(${dayRange})
+阶段目标：${phase.goal}
+建议子主题方向：${phase.topicHints.join("、")}${prevHint}
+
+请生成该阶段 ${phase.dayCount} 天的完整大纲 JSON。`,
       },
     ],
-    temperature: 0.5,
-    max_tokens: 8192,
+    temperature,
+    max_tokens: Math.min(8192, 400 + phase.dayCount * 280),
   });
 
   if (!response.ok) {
-    const errorData = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
-    };
-    throw new Error(errorData.error?.message || `API 请求失败: ${response.status}`);
+    return buildFallbackPhaseOutline(goal, phase);
   }
 
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   const content = data.choices?.[0]?.message?.content || "";
+  const parsed = parseOutlineJson(content);
 
-  try {
-    let jsonStr = content.trim();
-    if (!jsonStr) throw new Error("AI 返回内容为空");
-
-    jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").replace(/\s*```\s*$/, "").trim();
-    jsonStr = jsonStr.replace(/^\s*"outline"\s*:\s*/, "").trim();
-
-    const lastArrayEnd = jsonStr.lastIndexOf("]");
-    const lastObjectEnd = jsonStr.lastIndexOf("}");
-    if (lastArrayEnd > 0 && jsonStr.startsWith("[")) {
-      jsonStr = jsonStr.slice(0, lastArrayEnd + 1);
-    } else if (lastObjectEnd > 0 && jsonStr.startsWith("{")) {
-      jsonStr = jsonStr.slice(0, lastObjectEnd + 1);
-    }
-
-    const parsed = JSON.parse(jsonStr);
-    const outline = Array.isArray(parsed) ? parsed : parsed.outline;
-
-    if (Array.isArray(outline) && outline.length > 0) {
-      return outline.slice(0, totalDays).map((item: Record<string, unknown>, index: number) => ({
-        dayNumber: (item.dayNumber as number) || index + 1,
-        title: (item.title as string) || `第 ${index + 1} 天`,
-        goal: (item.goal as string) || "学习目标",
-        keywords: (item.keywords as string) || "",
-        estimatedMinutes: (item.estimatedMinutes as number) || 30,
-      }));
-    }
-    throw new Error(`大纲解析为空，原始内容: ${content.slice(0, 200)}`);
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e);
-    console.warn("[generateOutline] JSON 解析失败，尝试文本解析:", message);
+  if (parsed.length >= phase.dayCount) {
+    return parsed
+      .filter((item) => item.dayNumber >= phase.startDay && item.dayNumber <= phase.endDay)
+      .slice(0, phase.dayCount)
+      .map((item) => normalizeOutlineItem(item, phase));
   }
 
-  const fallback = parseOutlineFromText(content, totalDays, goal);
-  if (fallback.length > 0) return fallback;
+  return buildFallbackPhaseOutline(goal, phase);
+}
 
-  throw new Error("大纲生成失败：AI 未返回有效数据，请重试");
+function parseOutlineJson(content: string): OutlineItem[] {
+  try {
+    let jsonStr = content.trim();
+    if (!jsonStr) return [];
+    jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").replace(/\s*```\s*$/, "").trim();
+    const lastArrayEnd = jsonStr.lastIndexOf("]");
+    if (lastArrayEnd > 0 && jsonStr.startsWith("[")) {
+      jsonStr = jsonStr.slice(0, lastArrayEnd + 1);
+    }
+    const parsed = JSON.parse(jsonStr);
+    const outline = Array.isArray(parsed) ? parsed : parsed.outline;
+    if (!Array.isArray(outline)) return [];
+    return outline.map((item: Record<string, unknown>, index: number) => ({
+      dayNumber: (item.dayNumber as number) || index + 1,
+      title: String(item.title || ""),
+      goal: String(item.goal || item.learningObjective || ""),
+      keywords: String(item.keywords || ""),
+      estimatedMinutes: (item.estimatedMinutes as number) || 30,
+      phaseName: item.phaseName as string | undefined,
+      phaseOrder: item.phaseOrder as number | undefined,
+      difficulty: item.difficulty as OutlineItem["difficulty"],
+      prerequisites: item.prerequisites as string | undefined,
+      learningObjective: String(item.learningObjective || item.goal || ""),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function normalizeOutlineItem(item: OutlineItem, phase: AllocatedPhase): OutlineItem {
+  return {
+    dayNumber: item.dayNumber,
+    title: item.title || `第 ${item.dayNumber} 天`,
+    goal: item.goal || phase.goal,
+    keywords: item.keywords || phase.topicHints.slice(0, 3).join(", "),
+    estimatedMinutes: item.estimatedMinutes || 30,
+    phaseName: item.phaseName || phase.name,
+    phaseOrder: item.phaseOrder ?? phase.order,
+    difficulty: item.difficulty || phase.difficulty,
+    prerequisites:
+      item.prerequisites ||
+      (item.dayNumber > phase.startDay ? String(item.dayNumber - 1) : undefined),
+    learningObjective: item.learningObjective || item.goal || phase.goal,
+  };
+}
+
+function buildFallbackPhaseOutline(goal: string, phase: AllocatedPhase): OutlineItem[] {
+  const items: OutlineItem[] = [];
+  for (let d = phase.startDay; d <= phase.endDay; d++) {
+    const idx = d - phase.startDay;
+    const topic = phase.topicHints[idx % phase.topicHints.length];
+    items.push({
+      dayNumber: d,
+      title: `${topic}`,
+      goal: `${goal} — ${phase.goal}`,
+      keywords: phase.topicHints.join(", "),
+      estimatedMinutes: 30,
+      phaseName: phase.name,
+      phaseOrder: phase.order,
+      difficulty: phase.difficulty,
+      prerequisites: d > 1 ? String(d - 1) : undefined,
+      learningObjective: `掌握${topic}相关要点`,
+    });
+  }
+  return items;
 }
 
 export async function generateAssessmentQuestions(
@@ -353,51 +475,6 @@ export async function streamContent(
     },
     { signal },
   );
-}
-
-function parseOutlineFromText(
-  text: string,
-  totalDays: number,
-  fallbackGoal: string,
-): OutlineItem[] {
-  const outline: OutlineItem[] = [];
-  const lines = text.split("\n");
-  let currentDay = 0;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    const dayMatch = trimmed.match(/第?\s*(\d+)\s*[天日]/);
-    if (dayMatch) {
-      currentDay = parseInt(dayMatch[1], 10);
-      if (currentDay <= totalDays) {
-        const titleMatch = trimmed.match(/[：:]\s*(.+)/);
-        const title = titleMatch ? titleMatch[1].trim() : `第 ${currentDay} 天`;
-        outline.push({
-          dayNumber: currentDay,
-          title: title.substring(0, 100),
-          goal: title.substring(0, 200),
-          keywords: fallbackGoal,
-          estimatedMinutes: 30,
-        });
-      }
-    }
-  }
-
-  if (outline.length === 0) {
-    for (let i = 1; i <= totalDays; i++) {
-      outline.push({
-        dayNumber: i,
-        title: `第 ${i} 天：${fallbackGoal}学习`,
-        goal: "学习目标",
-        keywords: fallbackGoal,
-        estimatedMinutes: 30,
-      });
-    }
-  }
-
-  return outline;
 }
 
 function getDefaultAssessmentQuestions(goal: string): AssessmentQuestion[] {

@@ -1,6 +1,7 @@
 import { createTRPCClient, httpLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "../../api/router";
+import type { OutlineItem } from "@shared/outlineTypes";
 import type { LearningType } from "@shared/typeEngine";
 
 export interface StreamCallbacks {
@@ -8,14 +9,6 @@ export interface StreamCallbacks {
   onComplete: (fullText: string) => void;
   onError: (error: string) => void;
 }
-
-type OutlineItem = {
-  dayNumber: number;
-  title: string;
-  goal: string;
-  keywords: string;
-  estimatedMinutes: number;
-};
 
 type AssessmentQuestion = {
   questionIndex: number;

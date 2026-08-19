@@ -42,6 +42,19 @@ function preprocessContent(content: string): string {
   return preprocessMath(stripIllustrationMarkers(content));
 }
 
+const ALLOWED_PUBLIC_IMAGES = new Set([
+  "/logo.png",
+  "/ai-avatar.png",
+  "/hero-bg.jpg",
+]);
+
+function isAllowedMarkdownImageSrc(src: string | undefined): boolean {
+  if (!src?.trim()) return false;
+  if (src.startsWith("/uploads/")) return true;
+  if (/^https?:\/\//i.test(src)) return true;
+  return ALLOWED_PUBLIC_IMAGES.has(src);
+}
+
 function MarkdownRenderer({
   content,
   className = "",
@@ -242,14 +255,17 @@ function getMarkdownComponents(
         {children}
       </td>
     ),
-    img: ({ src, alt }) => (
-      <img
-        src={src}
-        alt={alt ?? ""}
-        className="content-illustration"
-        loading="lazy"
-      />
-    ),
+    img: ({ src, alt }) => {
+      if (!isAllowedMarkdownImageSrc(src)) return null;
+      return (
+        <img
+          src={src}
+          alt={alt ?? ""}
+          className="content-illustration"
+          loading="lazy"
+        />
+      );
+    },
   };
 }
 

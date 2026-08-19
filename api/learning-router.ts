@@ -152,6 +152,11 @@ export const learningRouter = createRouter({
             goal: z.string().optional(),
             keywords: z.string().optional(),
             estimatedMinutes: z.number().optional(),
+            phaseName: z.string().optional(),
+            phaseOrder: z.number().optional(),
+            difficulty: z.enum(["basic", "intermediate", "advanced"]).optional(),
+            prerequisites: z.string().optional(),
+            learningObjective: z.string().optional(),
           })
         ),
       })
@@ -191,6 +196,11 @@ export const learningRouter = createRouter({
             goal: item.goal || null,
             keywords: item.keywords || null,
             estimatedMinutes: item.estimatedMinutes || 30,
+            phaseName: item.phaseName || null,
+            phaseOrder: item.phaseOrder ?? null,
+            difficulty: item.difficulty || null,
+            prerequisites: item.prerequisites || null,
+            learningObjective: item.learningObjective || null,
           }))
         );
       }

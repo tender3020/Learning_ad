@@ -7,6 +7,8 @@
 弈智是一个全栈 AI 驱动的学习平台，通过 DeepSeek 大模型实现智能课程生成、流式授课、交互式答题和掌握度追踪。系统内置 **7 类学习引擎**，根据学习目标自动选择内容模板；支持万相 AI 插画与 Mermaid 图表混合配图、TTS 朗读、阅读模式与按天隔离的 AI 问答。
 
 > **功能需求链路文档**：[docs/functional-requirements.md](docs/functional-requirements.md) — 按用户旅程与系统模块整理的完整实现链路（页面、API、数据流、配图与掌握度等）。
+>
+> **架构通读与评估**：[docs/architecture-review.md](docs/architecture-review.md) — UI、后端、数据库、性能与架构债的完整评估报告。
 
 ## 核心功能
 
@@ -248,6 +250,15 @@ npm run dev            # http://localhost:3000
 npm run build
 npm start              # NODE_ENV=production，默认 PORT=3000
 ```
+
+**切勿在生产环境长期运行 `npm run dev`。** 开发模式会启用 Vite HMR，对外暴露时任意无效路径（如扫描器探测的 `/.aws/config`）都可能触发读盘错误 overlay。生产进程应为 `node dist/boot.js`，可用以下命令确认：
+
+```bash
+# Linux：应看到 node dist/boot.js，不应有 vite 进程
+ps aux | grep -E 'node dist/boot|vite'
+```
+
+若当前误用 dev 模式对外，改为 `npm run build && npm start` 后重启服务即可消除此类 overlay。
 
 ### 代码检查
 
