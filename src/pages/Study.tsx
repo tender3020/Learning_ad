@@ -550,6 +550,7 @@ export default function Study() {
           state={todayContentState}
           onGenerate={handleGenerateContent}
           isGenerating={isLoading || isStreaming}
+          onOpenOutline={openOutline}
           actions={
             <>
               {(error || tts.error) && (

@@ -14,6 +14,8 @@ type TodayHeaderProps = {
   state: TodayContentState;
   onGenerate?: () => void;
   isGenerating?: boolean;
+  /** 移动端点击 D{n}/{total} 打开学习大纲 */
+  onOpenOutline?: () => void;
   actions?: ReactNode;
 };
 
@@ -45,6 +47,7 @@ export default function TodayHeader({
   state,
   onGenerate,
   isGenerating,
+  onOpenOutline,
   actions,
 }: TodayHeaderProps) {
   const phaseClass = phaseOrder ? PHASE_BG[Math.min(phaseOrder, 6)] || "phase-bg-1" : "phase-bg-1";
@@ -56,9 +59,20 @@ export default function TodayHeader({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="type-caption font-medium text-token-brand">
-                D{dayNumber}/{totalDays}
-              </span>
+              {onOpenOutline ? (
+                <button
+                  type="button"
+                  onClick={onOpenOutline}
+                  className="type-caption font-medium text-token-brand rounded-md px-1.5 py-0.5 -ml-1.5 max-md:active:bg-token-brand-muted md:pointer-events-none md:cursor-default"
+                  aria-label={`第 ${dayNumber} 天，共 ${totalDays} 天，打开学习大纲`}
+                >
+                  D{dayNumber}/{totalDays}
+                </button>
+              ) : (
+                <span className="type-caption font-medium text-token-brand">
+                  D{dayNumber}/{totalDays}
+                </span>
+              )}
               {phaseName && (
                 <span className={`inline-flex items-center gap-1 type-caption px-2 py-0.5 rounded-full ${phaseClass} text-token-primary`}>
                   <Layers size={12} />
