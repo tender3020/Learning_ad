@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   BookOpen,
   Focus,
-  List,
   Minus,
   Plus,
   AlignJustify,
@@ -25,8 +24,6 @@ type ReadingToolbarProps = {
   onIncreaseFont: () => void;
   onToggleLineHeight: () => void;
   onToggleFocus: () => void;
-  onOpenToc?: () => void;
-  showTocButton?: boolean;
 };
 
 export default function ReadingToolbar({
@@ -39,8 +36,6 @@ export default function ReadingToolbar({
   onIncreaseFont,
   onToggleLineHeight,
   onToggleFocus,
-  onOpenToc,
-  showTocButton = false,
 }: ReadingToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -69,18 +64,6 @@ export default function ReadingToolbar({
           <Plus size={14} />
         </button>
       </div>
-
-      {showTocButton && onOpenToc && (
-        <button
-          type="button"
-          className="reading-toolbar__btn reading-toolbar__btn--icon lg:hidden"
-          onClick={onOpenToc}
-          title="章节目录"
-          aria-label="章节目录"
-        >
-          <List size={14} />
-        </button>
-      )}
 
       <div className="reading-toolbar__more ml-auto">
         <button

@@ -96,12 +96,22 @@ export default function Onboarding() {
   const activePlanCount = existingPlans?.filter((p) => p.status === "active").length || 0;
   const canCreate = activePlanCount < 7;
 
-  const createPlanMut = trpc.learning.createPlan.useMutation();
-  const saveOutlineMut = trpc.learning.saveOutline.useMutation();
+  const utils = trpc.useUtils();
+  const createPlanMut = trpc.learning.createPlan.useMutation({
+    onSuccess: () => {
+      void utils.learning.getPlans.invalidate();
+    },
+  });
+  const saveOutlineMut = trpc.learning.saveOutline.useMutation({
+    onSuccess: (_data, variables) => {
+      void utils.learning.getPlans.invalidate();
+      void utils.learning.getPlan.invalidate({ planId: variables.planId });
+      void utils.learning.getOutline.invalidate({ planId: variables.planId });
+    },
+  });
   const createAssessmentMut = trpc.assessment.create.useMutation();
   const submitAnswerMut = trpc.assessment.submitAnswer.useMutation();
   const completeAssessmentMut = trpc.assessment.complete.useMutation();
-  const utils = trpc.useUtils();
 
   // ============ Step 1: 开始 ============
   const handleStart = () => {
@@ -338,11 +348,11 @@ export default function Onboarding() {
               <img src="/logo.png" alt="弈智" className="w-full h-full object-cover" />
             </motion.div>
             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-              className="text-3xl md:text-5xl font-semibold text-[#F5F5F7] mb-3 md:mb-4" style={{ letterSpacing: "-0.02em" }}>
-              欢迎来到 <span className="text-[#A78BFA]">弈智</span>
+              className="text-3xl md:text-5xl font-semibold text-token-primary mb-3 md:mb-4" style={{ letterSpacing: "-0.02em" }}>
+              欢迎来到 <span className="text-token-brand-light">弈智</span>
             </motion.h1>
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-              className="text-base md:text-lg text-[#8A8A8E] mb-8 md:mb-10">
+              className="text-base md:text-lg text-token-secondary mb-8 md:mb-10">
               你的 AI 驱动的自适应学习伙伴
             </motion.p>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}
@@ -350,14 +360,14 @@ export default function Onboarding() {
               {[{ icon: Brain, text: "AI 个性化教学" }, { icon: Target, text: "精准知识图谱" }, { icon: Zap, text: "实时进度追踪" }, { icon: BookOpen, text: "系统化课程" }].map((f, i) => (
                 <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.8 + i * 0.1 }}
                   className="flex items-center gap-2 md:gap-3 p-2 md:p-3 rounded-xl liquid-glass text-left">
-                  <f.icon size={18} className="text-[#6E56CF] flex-shrink-0" />
-                  <span className="text-xs md:text-sm text-[#E0E0E5]">{f.text}</span>
+                  <f.icon size={18} className="text-token-brand flex-shrink-0" />
+                  <span className="text-xs md:text-sm text-token-primary">{f.text}</span>
                 </motion.div>
               ))}
             </motion.div>
             <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
               whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleStart}
-              className="inline-flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-2xl font-medium text-base md:text-lg transition-colors brand-glow">
+              className="btn-brand inline-flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 rounded-2xl font-medium text-base md:text-lg brand-glow">
               开始学习之旅 <ArrowRight size={20} />
             </motion.button>
           </motion.div>
@@ -375,42 +385,42 @@ export default function Onboarding() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="liquid-glass rounded-2xl md:rounded-3xl p-5 md:p-8">
               <div className="flex items-center gap-2 md:gap-3 mb-2">
-                <Sparkles size={20} className="text-[#6E56CF]" />
-                <h2 className="text-lg md:text-2xl font-semibold text-[#F5F5F7]">设定你的学习目标</h2>
+                <Sparkles size={20} className="text-token-brand" />
+                <h2 className="text-lg md:text-2xl font-semibold text-token-primary">设定你的学习目标</h2>
               </div>
-              <p className="text-xs md:text-sm text-[#8A8A8E] mb-4 md:mb-6">
+              <p className="text-xs md:text-sm text-token-secondary mb-4 md:mb-6">
                 告诉我们你想学什么，AI 将先评估你的水平，再为你定制个性化学习路径
               </p>
               <div className="relative mb-4 md:mb-6">
                 <input type="text" value={goalInput} onChange={(e) => { setGoalInput(e.target.value); setSelectedGoal(null); }}
                   placeholder="例如：学习 Python 编程..."
-                  className="w-full px-4 md:px-5 py-3 md:py-4 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl md:rounded-2xl text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all text-sm md:text-base" />
+                  className="input-field w-full px-4 md:px-5 py-3 md:py-4 rounded-xl md:rounded-2xl text-sm md:text-base" />
               </div>
               <div className="mb-4 md:mb-6">
-                <p className="type-caption md:text-xs text-[#8A8A8E] uppercase tracking-wider mb-2 md:mb-3">热门学习目标</p>
+                <p className="type-caption md:text-xs text-token-secondary uppercase tracking-wider mb-2 md:mb-3">热门学习目标</p>
                 <div className="flex flex-wrap gap-1.5 md:gap-2">
                   {suggestedGoals.map((sg) => (
                     <button key={sg} onClick={() => { setSelectedGoal(sg); setGoalInput(sg); }}
-                      className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl text-xs md:text-sm transition-all ${
-                        selectedGoal === sg ? "bg-[#6E56CF] text-white" : "bg-[rgba(255,255,255,0.03)] text-[#8A8A8E] hover:text-[#F5F5F7] hover:bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)]"
+                      className={`choice-chip px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl text-xs md:text-sm ${
+                        selectedGoal === sg ? "choice-chip--active" : ""
                       }`}>{sg}</button>
                   ))}
                 </div>
               </div>
               <div className="mb-6 md:mb-8">
-                <p className="type-caption md:text-xs text-[#8A8A8E] uppercase tracking-wider mb-2 md:mb-3">学习周期</p>
+                <p className="type-caption md:text-xs text-token-secondary uppercase tracking-wider mb-2 md:mb-3">学习周期</p>
                 <div className="grid grid-cols-5 gap-1.5 md:gap-3">
                   {[7, 14, 30, 60, 90].map((days) => (
                     <button key={days} onClick={() => setTotalDays(days)}
-                      className={`py-2 md:py-3 rounded-lg md:rounded-xl text-xs md:text-sm font-medium transition-all ${
-                        totalDays === days ? "bg-[#6E56CF] text-white" : "bg-[rgba(255,255,255,0.03)] text-[#8A8A8E] hover:text-[#F5F5F7] border border-[rgba(255,255,255,0.08)]"
+                      className={`choice-chip py-2 md:py-3 rounded-lg md:rounded-xl text-xs md:text-sm font-medium ${
+                        totalDays === days ? "choice-chip--active" : ""
                       }`}>{days}天</button>
                   ))}
                 </div>
               </div>
               <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={handleSubmitGoal}
                 disabled={!goalInput.trim() && !selectedGoal}
-                className="w-full flex items-center justify-center gap-2 py-3 md:py-4 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl md:rounded-2xl font-medium text-base md:text-lg transition-all brand-glow">
+                className="btn-brand w-full flex items-center justify-center gap-2 py-3 md:py-4 rounded-xl md:rounded-2xl font-medium text-base md:text-lg brand-glow">
                 <Target size={18} /> 进入能力评估
               </motion.button>
             </motion.div>
@@ -421,9 +431,9 @@ export default function Onboarding() {
         {step === "detecting_type" && (
           <motion.div key="detecting_type" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="relative z-10 text-center px-4">
-            <Loader2 size={40} className="mx-auto mb-4 text-[#6E56CF] animate-spin" />
-            <h2 className="text-lg md:text-xl font-semibold text-[#F5F5F7] mb-2">正在分析学习类型...</h2>
-            <p className="text-sm text-[#8A8A8E]">AI 正在根据「{selectedGoal || goalInput}」判定最适合的学习模式</p>
+            <Loader2 size={40} className="mx-auto mb-4 text-token-brand animate-spin" />
+            <h2 className="text-lg md:text-xl font-semibold text-token-primary mb-2">正在分析学习类型...</h2>
+            <p className="text-sm text-token-secondary">AI 正在根据「{selectedGoal || goalInput}」判定最适合的学习模式</p>
           </motion.div>
         )}
 
@@ -431,9 +441,9 @@ export default function Onboarding() {
         {step === "generating_quiz" && (
           <motion.div key="generating_quiz" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="relative z-10 text-center px-4">
-            <Loader2 size={40} className="mx-auto mb-4 text-[#6E56CF] animate-spin" />
-            <h2 className="text-lg md:text-xl font-semibold text-[#F5F5F7] mb-2">正在生成评估题目...</h2>
-            <p className="text-sm text-[#8A8A8E]">
+            <Loader2 size={40} className="mx-auto mb-4 text-token-brand animate-spin" />
+            <h2 className="text-lg md:text-xl font-semibold text-token-primary mb-2">正在生成评估题目...</h2>
+            <p className="text-sm text-token-secondary">
               已识别为「{TYPE_LABELS[detectedType]?.name || ""}」模式
               {typeReason ? ` · ${typeReason}` : ""}
             </p>
@@ -460,13 +470,13 @@ export default function Onboarding() {
               {/* 进度条 */}
             <div className="w-full mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="type-caption md:text-xs text-[#8A8A8E]">能力评估 · 第 {currentQIndex + 1}/{quizQuestions.length} 题</span>
-                <button onClick={handleSkipAssessment} className="type-caption md:text-xs text-[#8A8A8E] hover:text-[#F5F5F7] transition-colors">
+                <span className="type-caption md:text-xs text-token-secondary">能力评估 · 第 {currentQIndex + 1}/{quizQuestions.length} 题</span>
+                <button onClick={handleSkipAssessment} className="type-caption md:text-xs text-token-secondary hover:text-token-primary transition-colors">
                   跳过评估
                 </button>
               </div>
-              <div className="h-1 bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden">
-                <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg, #6E56CF, #A78BFA)" }}
+              <div className="h-1 progress-track rounded-full overflow-hidden">
+                <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg, var(--brand-primary), var(--brand-secondary))" }}
                   animate={{ width: `${quizProgress}%` }} transition={{ duration: 0.3 }} />
               </div>
             </div>
@@ -480,7 +490,7 @@ export default function Onboarding() {
             </div>
 
             {/* 题目 */}
-            <h2 className="text-base md:text-lg font-medium text-[#F5F5F7] mb-5 leading-relaxed">{currentQ.question}</h2>
+            <h2 className="text-base md:text-lg font-medium text-token-primary mb-5 leading-relaxed">{currentQ.question}</h2>
 
             {/* 选项 */}
             <div className="space-y-2.5 mb-5">
@@ -493,19 +503,18 @@ export default function Onboarding() {
 
                 return (
                   <button key={opt} onClick={() => handleSelectOption(opt)} disabled={answerSubmitted}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                      showCorrect ? "border-[#34C759] bg-[rgba(52,199,89,0.1)]" :
-                      isWrong ? "border-[#FF3B30] bg-[rgba(255,59,48,0.1)]" :
-                      isSelected ? "border-[#6E56CF] bg-[rgba(110,86,207,0.1)]" :
-                      "border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.03)]"
+                    className={`quiz-option w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left ${
+                      showCorrect ? "quiz-option--correct" :
+                      isWrong ? "quiz-option--wrong" :
+                      isSelected ? "quiz-option--selected" : ""
                     }`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-semibold ${
                       showCorrect ? "bg-[#34C759] text-white" : isWrong ? "bg-[#FF3B30] text-white" :
-                      isSelected ? "bg-[#6E56CF] text-white" : "bg-[rgba(255,255,255,0.05)]"
+                      isSelected ? "bg-[#6E56CF] text-white" : "quiz-option-letter"
                     }`}>
                       {showCorrect ? <CheckCircle2 size={16} /> : isWrong ? <XCircle size={16} /> : opt}
                     </div>
-                    <span className="text-sm text-[#F5F5F7] flex-1">{optionText}</span>
+                    <span className="text-sm text-token-primary flex-1">{optionText}</span>
                   </button>
                 );
               })}
@@ -515,19 +524,19 @@ export default function Onboarding() {
             <AnimatePresence>
               {answerSubmitted && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mb-5">
-                  <div className="p-4 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)]">
+                  <div className="p-4 rounded-xl surface-panel">
                     <div className="flex items-center gap-2 mb-2">
                       <Lightbulb size={14} className="text-[#FF9500]" />
                       <span className="text-xs font-medium text-[#FF9500]">答案解析</span>
                     </div>
-                    <p className="text-xs text-[#8A8A8E] leading-relaxed">
+                    <p className="text-xs text-token-secondary leading-relaxed">
                       正确答案：<span className="text-[#34C759] font-medium">{currentQ.correctAnswer}</span>
                       {currentQ.userAnswer && currentQ.userAnswer !== currentQ.correctAnswer && (
                         <span className="text-[#FF3B30]"> · 你的答案：{currentQ.userAnswer}</span>
                       )}
                     </p>
                     {currentQ.explanation && (
-                      <p className="text-xs text-[#8A8A8E] leading-relaxed mt-2">{currentQ.explanation}</p>
+                      <p className="text-xs text-token-secondary leading-relaxed mt-2">{currentQ.explanation}</p>
                     )}
                   </div>
                 </motion.div>
@@ -537,15 +546,15 @@ export default function Onboarding() {
             </div>
 
             {/* 按钮 - 固定底部，不被Tab Bar遮挡 */}
-            <div className="flex-shrink-0 py-3 md:py-4 bg-[var(--bg-primary)] border-t border-[rgba(255,255,255,0.05)] -mx-3 md:mx-0 px-3 md:px-0">
+            <div className="flex-shrink-0 py-3 md:py-4 bg-[var(--bg-primary)] border-t border-token-surface -mx-3 md:mx-0 px-3 md:px-0">
               {!answerSubmitted ? (
                 <button onClick={handleSubmitAnswer} disabled={!selectedOption}
-                  className="w-full py-3 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl text-sm font-medium transition-colors">
+                  className="btn-brand w-full py-3 rounded-xl text-sm font-medium">
                   提交答案
                 </button>
               ) : (
                 <button onClick={handleNextQuestion}
-                  className="w-full py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1">
+                  className="btn-brand w-full py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-1">
                   {currentQIndex < quizQuestions.length - 1 ? "下一题 " : "完成评估 "}
                   <ArrowRight size={14} />
                 </button>
@@ -578,17 +587,17 @@ export default function Onboarding() {
               </div>
             </div>
             <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              className="text-xl md:text-2xl font-semibold text-[#F5F5F7] mb-2">
+              className="text-xl md:text-2xl font-semibold text-token-primary mb-2">
               正在构建你的「{LEVEL_NAMES[skillLevel] || "中级"}」学习路径
             </motion.h2>
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
-              className="text-sm text-[#8A8A8E] mb-4 md:mb-6">AI 正在根据你的水平生成个性化课程...</motion.p>
+              className="text-sm text-token-secondary mb-4 md:mb-6">AI 正在根据你的水平生成个性化课程...</motion.p>
             <div className="w-56 md:w-72 mx-auto">
-              <div className="h-1.5 bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden">
+              <div className="h-1.5 progress-track rounded-full overflow-hidden">
                 <motion.div className="h-full bg-gradient-to-r from-[#6E56CF] to-[#A78BFA] rounded-full"
                   initial={{ width: "0%" }} animate={{ width: `${store.generationProgress}%` }} transition={{ duration: 0.5 }} />
               </div>
-              <p className="type-caption md:text-xs text-[#8A8A8E] mt-2">{store.generationStage}</p>
+              <p className="type-caption md:text-xs text-token-secondary mt-2">{store.generationStage}</p>
             </div>
           </motion.div>
         )}
@@ -598,26 +607,26 @@ export default function Onboarding() {
           <motion.div key="outline_preview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="relative z-10 w-full max-w-2xl px-3 md:px-6 flex flex-col max-h-[85vh]">
             <div className="text-center mb-4">
-              <h2 className="text-xl md:text-2xl font-semibold text-[#F5F5F7] mb-1">确认你的 {totalDays} 天学习大纲</h2>
-              <p className="text-sm text-[#8A8A8E]">按阶段循序渐进，确认后开始学习</p>
+              <h2 className="text-xl md:text-2xl font-semibold text-token-primary mb-1">确认你的 {totalDays} 天学习大纲</h2>
+              <p className="text-sm text-token-secondary">按阶段循序渐进，确认后开始学习</p>
             </div>
             {planError && (
               <div className="mb-3 p-3 rounded-xl bg-[rgba(255,59,48,0.1)] border border-[rgba(255,59,48,0.2)] text-xs text-[#FF3B30]">
                 {planError}
               </div>
             )}
-            <div className="flex-1 overflow-y-auto rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] p-3 mb-4 space-y-3">
+            <div className="flex-1 overflow-y-auto rounded-2xl surface-panel p-3 mb-4 space-y-3">
               {outlinePhaseGroups.map((group) => (
                 <div key={`${group.phaseOrder}-${group.phaseName}`}>
-                  <p className="text-xs font-medium text-[#A78BFA] mb-2 px-1">{group.phaseName}</p>
+                  <p className="text-xs font-medium text-token-brand-light mb-2 px-1">{group.phaseName}</p>
                   <div className="space-y-1">
                     {group.items.map((item) => (
-                      <div key={item.dayNumber} className="flex gap-3 px-2 py-2 rounded-lg hover:bg-[rgba(255,255,255,0.03)]">
-                        <span className="type-caption text-[#6E56CF] font-medium w-8 flex-shrink-0 pt-0.5">D{item.dayNumber}</span>
+                      <div key={item.dayNumber} className="flex gap-3 px-2 py-2 rounded-lg hover-surface">
+                        <span className="type-caption text-token-brand font-medium w-8 flex-shrink-0 pt-0.5">D{item.dayNumber}</span>
                         <div className="min-w-0">
-                          <p className="text-sm text-[#F5F5F7] font-medium truncate">{item.title}</p>
+                          <p className="text-sm text-token-primary font-medium truncate">{item.title}</p>
                           {item.learningObjective && (
-                            <p className="type-caption text-[#8A8A8E] truncate mt-0.5">{item.learningObjective}</p>
+                            <p className="type-caption text-token-secondary truncate mt-0.5">{item.learningObjective}</p>
                           )}
                         </div>
                       </div>
@@ -631,7 +640,7 @@ export default function Onboarding() {
                 type="button"
                 onClick={() => void regenerateOutlineOnly()}
                 disabled={isSavingOutline}
-                className="flex-1 px-4 py-3 rounded-xl text-sm text-[#8A8A8E] border border-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.05)] transition-colors disabled:opacity-50"
+                className="btn-ghost flex-1 px-4 py-3 rounded-xl text-sm disabled:opacity-50"
               >
                 重新生成
               </button>
@@ -639,7 +648,7 @@ export default function Onboarding() {
                 type="button"
                 onClick={handleConfirmOutline}
                 disabled={isSavingOutline}
-                className="flex-[2] inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl font-medium text-sm transition-colors disabled:opacity-50"
+                className="btn-brand flex-[2] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-sm disabled:opacity-50"
               >
                 {isSavingOutline ? <Loader2 size={16} className="animate-spin" /> : null}
                 确认并开始学习
@@ -659,16 +668,16 @@ export default function Onboarding() {
               <Award size={36} style={{ color: LEVEL_COLORS[skillLevel] }} />
             </motion.div>
             <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-              className="text-2xl md:text-3xl font-semibold text-[#F5F5F7] mb-2 md:mb-3">
+              className="text-2xl md:text-3xl font-semibold text-token-primary mb-2 md:mb-3">
               你的学习等级：{LEVEL_NAMES[skillLevel] || "中级"}
             </motion.h2>
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-              className="text-sm text-[#8A8A8E] mb-4">
+              className="text-sm text-token-secondary mb-4">
               评估得分 {assessmentScore}/100 · 共 {totalDays} 天
             </motion.p>
             <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
               whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => navigate("/today")}
-              className="inline-flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-2xl font-medium text-base md:text-lg transition-colors brand-glow">
+              className="btn-brand inline-flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 rounded-2xl font-medium text-base md:text-lg brand-glow">
               进入学习看板 <ArrowRight size={20} />
             </motion.button>
           </motion.div>
@@ -683,21 +692,21 @@ export default function Onboarding() {
               <AlertCircle size={32} className="text-[#FF9500]" />
             </motion.div>
             <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-              className="text-xl md:text-2xl font-semibold text-[#F5F5F7] mb-2 md:mb-3">计划数量已达上限</motion.h2>
+              className="text-xl md:text-2xl font-semibold text-token-primary mb-2 md:mb-3">计划数量已达上限</motion.h2>
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-              className="text-sm text-[#8A8A8E] mb-6">
+              className="text-sm text-token-secondary mb-6">
               你已有 <span className="text-[#FF9500] font-medium">{activePlanCount}</span> 个进行中的学习计划，系统限制最多同时管理 7 个。
               请先完成部分现有计划，或删除不需要的计划后再添加新的学习内容。
             </motion.p>
             <div className="flex flex-col sm:flex-row gap-3">
               <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}
                 whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => navigate("/today")}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#6E56CF] hover:bg-[#5A45B0] text-white rounded-xl font-medium text-sm transition-colors">
+                className="btn-brand flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-sm">
                 管理现有计划 <ArrowRight size={16} />
               </motion.button>
               <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
                 whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setStep("welcome")}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.08)] text-[#F5F5F7] rounded-xl font-medium text-sm transition-colors">
+                className="btn-ghost flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-sm">
                 <ArrowLeft size={16} /> 返回
               </motion.button>
             </div>

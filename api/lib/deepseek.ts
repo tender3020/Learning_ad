@@ -23,6 +23,9 @@ export async function chatCompletion(
     },
     body: JSON.stringify({
       model: model ?? env.deepseekModel,
+      // deepseek-v4 系列默认开启推理，reasoning 会消耗 max_tokens 且不进入正文，
+      // 导致流式长时间无输出、JSON 被截断。默认关闭，调用方可显式覆盖。
+      thinking: { type: "disabled" },
       ...rest,
     }),
     signal: init?.signal,

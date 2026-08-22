@@ -1,6 +1,6 @@
 import { env } from "./env";
 
-/** 3:2 横向；2K 预设由万相按近 3:2 输出，兼容旧 1536×1024 */
+/** 3:2 横向，万相 API 要求 width*height 格式（如 1536*1024） */
 export const WANXIANG_IMAGE_SIZE = env.dashscopeImageSize;
 export const WANXIANG_IMAGE_RATIO = 3 / 2;
 

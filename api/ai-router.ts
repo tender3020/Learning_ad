@@ -15,7 +15,7 @@ const learningTypeSchema = z.enum([
 export const aiRouter = createRouter({
   detectLearningType: authedQuery
     .input(z.object({ goal: z.string().min(1) }))
-    .mutation(async ({ input }) => ai.detectLearningType(input.goal)),
+    .mutation(async ({ ctx, input }) => ai.detectLearningType(input.goal, ctx.user.id)),
 
   generateOutline: authedQuery
     .input(
@@ -24,14 +24,17 @@ export const aiRouter = createRouter({
         totalDays: z.number().int().min(1).max(365),
         learningType: learningTypeSchema.default("abstract_logic"),
         skillLevel: z.string().default("l1"),
+        planId: z.number().optional(),
       }),
     )
-    .mutation(async ({ input }) =>
+    .mutation(async ({ ctx, input }) =>
       ai.generateOutline(
         input.goal,
         input.totalDays,
         input.learningType,
         input.skillLevel,
+        ctx.user.id,
+        input.planId,
       ),
     ),
 
@@ -42,8 +45,8 @@ export const aiRouter = createRouter({
         learningType: learningTypeSchema.default("abstract_logic"),
       }),
     )
-    .mutation(async ({ input }) =>
-      ai.generateAssessmentQuestions(input.goal, input.learningType),
+    .mutation(async ({ ctx, input }) =>
+      ai.generateAssessmentQuestions(input.goal, input.learningType, ctx.user.id),
     ),
 
   ask: authedQuery

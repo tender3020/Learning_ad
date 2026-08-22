@@ -3,7 +3,6 @@ import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
 import { splitContentWithQuizzes, QuizCard } from "@/components/quiz/QuizRenderer";
 import SectionCard from "./SectionCard";
 import {
-  buildTocFromTextParts,
   createHeadingIdState,
   getSectionAccent,
   splitMarkdownByH2,
@@ -14,14 +13,6 @@ interface ReadingMarkdownProps {
   knowledgeName?: string;
   onQuizSubmitted?: () => void;
   deferMermaidRender?: boolean;
-}
-
-export function getReadingTocItems(content: string) {
-  const parts = splitContentWithQuizzes(content);
-  const textParts = parts
-    .filter((part): part is { type: "text"; content: string } => part.type === "text")
-    .map((part) => part.content);
-  return buildTocFromTextParts(textParts);
 }
 
 function ReadingMarkdown({

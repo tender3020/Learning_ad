@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { assessments, assessmentAnswers } from "@db/schema";
+import { assessments, assessmentAnswers, learningPlans } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 
 /**
@@ -438,6 +438,20 @@ export const assessmentRouter = createRouter({
         .update(assessments)
         .set({ planId: input.planId })
         .where(eq(assessments.id, input.assessmentId));
+
+      // 评估已完成时，把评定等级同步到学习计划
+      const record = assessment[0];
+      if (record.status === "completed" && record.skillLevel) {
+        await db
+          .update(learningPlans)
+          .set({ skillLevel: record.skillLevel, updatedAt: new Date() })
+          .where(
+            and(
+              eq(learningPlans.id, input.planId),
+              eq(learningPlans.userId, userId)
+            )
+          );
+      }
 
       return { success: true };
     }),

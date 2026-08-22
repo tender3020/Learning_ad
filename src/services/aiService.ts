@@ -197,6 +197,13 @@ export class AIService {
     learningType: LearningType = "abstract_logic",
     skillLevel: string = "l1",
     callbacks: StreamCallbacks,
+    meta: {
+      dayNumber?: number;
+      phaseOrder?: number;
+      totalDays?: number;
+      phaseName?: string;
+      phaseGoal?: string;
+    } = {},
   ): Promise<void> {
     this.abortController = new AbortController();
 
@@ -205,7 +212,16 @@ export class AIService {
         method: "POST",
         headers: getAuthHeaders(),
         credentials: "include",
-        body: JSON.stringify({ prompt, learningType, skillLevel }),
+        body: JSON.stringify({
+          prompt,
+          learningType,
+          skillLevel,
+          dayNumber: meta.dayNumber ?? 1,
+          phaseOrder: meta.phaseOrder,
+          totalDays: meta.totalDays,
+          phaseName: meta.phaseName,
+          phaseGoal: meta.phaseGoal,
+        }),
         signal: this.abortController.signal,
       });
 

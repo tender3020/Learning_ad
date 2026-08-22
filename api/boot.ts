@@ -58,6 +58,11 @@ const streamInputSchema = z.object({
     ])
     .default("abstract_logic"),
   skillLevel: z.string().default("l1"),
+  dayNumber: z.number().int().min(1).default(1),
+  phaseOrder: z.number().int().min(1).optional(),
+  totalDays: z.number().int().min(1).optional(),
+  phaseName: z.string().optional(),
+  phaseGoal: z.string().optional(),
 });
 
 app.post("/api/ai/stream", async (c) => {
@@ -74,12 +79,14 @@ app.post("/api/ai/stream", async (c) => {
   }
 
   try {
-    const upstream = await streamContent(
-      body.prompt,
-      body.learningType,
-      body.skillLevel,
-      c.req.raw.signal,
-    );
+    const upstream = await streamContent(body.prompt, body.learningType, body.skillLevel, {
+      dayNumber: body.dayNumber,
+      phaseOrder: body.phaseOrder,
+      totalDays: body.totalDays,
+      phaseName: body.phaseName,
+      phaseGoal: body.phaseGoal,
+      signal: c.req.raw.signal,
+    });
 
     if (!upstream.ok) {
       const errorData = await upstream.json().catch(() => ({}));

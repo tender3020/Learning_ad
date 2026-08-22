@@ -101,8 +101,8 @@ export default function Login() {
             >
               <img src="/logo.png" alt="弈智" className="w-full h-full object-cover" />
             </motion.div>
-            <h1 className="text-2xl font-semibold text-[#F5F5F7] mb-1">弈智</h1>
-            <p className="text-sm text-[#8A8A8E]">AI 驱动的自适应学习平台</p>
+            <h1 className="text-2xl font-semibold text-token-primary mb-1">弈智</h1>
+            <p className="text-sm text-token-secondary">AI 驱动的自适应学习平台</p>
           </div>
 
           {/* Error */}
@@ -125,13 +125,13 @@ export default function Login() {
             >
               {/* Phone Input */}
               <div className="mb-6">
-                <label className="block text-xs text-[#8A8A8E] uppercase tracking-wider mb-2">
+                <label className="block text-xs text-token-secondary uppercase tracking-wider mb-2">
                   手机号
                 </label>
                 <div className="relative">
                   <Smartphone
                     size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8A8A8E]"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-token-secondary"
                   />
                   <input
                     type="tel"
@@ -142,7 +142,7 @@ export default function Login() {
                       setError("");
                     }}
                     placeholder="请输入手机号"
-                    className="w-full pl-11 pr-4 py-3.5 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all text-base"
+                    className="input-field w-full pl-11 pr-4 py-3.5 rounded-xl text-base"
                     autoFocus
                   />
                 </div>
@@ -150,7 +150,7 @@ export default function Login() {
 
               {/* Dev hint */}
               <div className="mb-6 p-3 rounded-xl bg-[rgba(110,86,207,0.08)] border border-[rgba(110,86,207,0.15)]">
-                <p className="text-xs text-[#A78BFA] flex items-center gap-1.5">
+                <p className="text-xs text-token-brand-light flex items-center gap-1.5">
                   <Sparkles size={12} />
                   开发模式：验证码固定为 123456
                 </p>
@@ -160,7 +160,7 @@ export default function Login() {
               <button
                 onClick={handleSendCode}
                 disabled={sendCode.isPending || phone.length !== 11}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl font-medium transition-all brand-glow"
+                className="btn-brand w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium brand-glow"
               >
                 {sendCode.isPending ? (
                   <Loader2 size={18} className="animate-spin" />
@@ -181,21 +181,21 @@ export default function Login() {
             >
               {/* Phone display */}
               <div className="mb-4 text-center">
-                <p className="text-sm text-[#8A8A8E]">
+                <p className="text-sm text-token-secondary">
                   验证码已发送至{" "}
-                  <span className="text-[#F5F5F7]">{phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1****$3")}</span>
+                  <span className="text-token-primary">{phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1****$3")}</span>
                 </p>
               </div>
 
               {/* Code Input */}
               <div className="mb-6">
-                <label className="block text-xs text-[#8A8A8E] uppercase tracking-wider mb-2">
+                <label className="block text-xs text-token-secondary uppercase tracking-wider mb-2">
                   验证码
                 </label>
                 <div className="relative">
                   <Lock
                     size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8A8A8E]"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-token-secondary"
                   />
                   <input
                     type="text"
@@ -206,7 +206,7 @@ export default function Login() {
                       setError("");
                     }}
                     placeholder="请输入 6 位验证码"
-                    className="w-full pl-11 pr-4 py-3.5 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl text-[#F5F5F7] placeholder-[#8A8A8E] focus:outline-none focus:border-[#6E56CF] transition-all text-base tracking-widest text-center"
+                    className="input-field w-full pl-11 pr-4 py-3.5 rounded-xl text-base tracking-widest text-center"
                     autoFocus
                   />
                 </div>
@@ -215,11 +215,11 @@ export default function Login() {
               {/* Resend */}
               <div className="mb-6 text-center">
                 {countdown > 0 ? (
-                  <span className="text-xs text-[#8A8A8E]">{countdown} 秒后重新发送</span>
+                  <span className="text-xs text-token-secondary">{countdown} 秒后重新发送</span>
                 ) : (
                   <button
                     onClick={handleSendCode}
-                    className="text-xs text-[#6E56CF] hover:text-[#A78BFA] transition-colors"
+                    className="text-xs text-token-brand hover:text-token-brand-light transition-colors"
                   >
                     重新发送验证码
                   </button>
@@ -230,7 +230,7 @@ export default function Login() {
               <button
                 onClick={handleLogin}
                 disabled={login.isPending || code.length !== 6}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl font-medium transition-all brand-glow mb-3"
+                className="btn-brand w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium brand-glow mb-3"
               >
                 {login.isPending ? (
                   <Loader2 size={18} className="animate-spin" />
@@ -245,7 +245,7 @@ export default function Login() {
               {/* Back */}
               <button
                 onClick={handleBack}
-                className="w-full py-2 text-sm text-[#8A8A8E] hover:text-[#F5F5F7] transition-colors"
+                className="w-full py-2 text-sm text-token-secondary hover:text-token-primary transition-colors"
               >
                 更换手机号
               </button>

@@ -189,30 +189,28 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
 
   const getOptionStyle = (key: QuizOption) => {
     if (!submitted) {
-      return selected === key
-        ? "border-[#6E56CF] bg-[rgba(110,86,207,0.15)]"
-        : "border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.03)]";
+      return selected === key ? "quiz-option--selected" : "";
     }
     if (key === quiz.correct) {
-      return "border-[#34C759] bg-[rgba(52,199,89,0.1)]";
+      return "quiz-option--correct";
     }
     if (selected === key && key !== quiz.correct) {
-      return "border-[#FF3B30] bg-[rgba(255,59,48,0.1)]";
+      return "quiz-option--wrong";
     }
-    return "border-[rgba(255,255,255,0.04)] bg-[rgba(255,255,255,0.02)]";
+    return "opacity-70";
   };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="reading-quiz my-5 rounded-2xl border border-[rgba(110,86,207,0.2)] overflow-hidden"
-      style={{ background: "linear-gradient(180deg, rgba(110,86,207,0.08) 0%, rgba(110,86,207,0.02) 100%)" }}
+      className="reading-quiz my-5 rounded-2xl overflow-hidden surface-panel"
+      style={{ background: "linear-gradient(180deg, var(--brand-muted-bg) 0%, var(--surface-elevated) 100%)" }}
     >
       {/* 头部 */}
-      <div className="px-4 py-3 md:px-5 md:py-4 flex items-center gap-2 border-b border-[rgba(110,86,207,0.1)]">
-        <HelpCircle size={16} className="text-[#6E56CF]" />
-        <span className="text-xs font-medium text-[#A78BFA]">练习题</span>
+      <div className="px-4 py-3 md:px-5 md:py-4 flex items-center gap-2 border-b border-token-surface">
+        <HelpCircle size={16} className="text-token-brand" />
+        <span className="text-xs font-medium text-token-brand-light">练习题</span>
       </div>
 
       {/* 题目 */}
@@ -229,7 +227,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
             key={key}
             onClick={() => handleSelect(key)}
             disabled={submitted}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 md:px-4 md:py-3 rounded-xl border text-left transition-all ${getOptionStyle(key)}`}
+            className={`quiz-option w-full flex items-center gap-3 px-3 py-2.5 md:px-4 md:py-3 rounded-xl text-left ${getOptionStyle(key)}`}
           >
             <div
               className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs md:text-sm font-semibold ${
@@ -239,7 +237,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
                     ? "bg-[#FF3B30] text-white"
                     : selected === key
                       ? "bg-[#6E56CF] text-white"
-                      : "bg-[rgba(255,255,255,0.05)] text-[var(--text-primary)]"
+                      : "quiz-option-letter"
               }`}
             >
               {submitted && key === quiz.correct ? (
@@ -263,7 +261,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
           <button
             onClick={handleSubmit}
             disabled={!selected}
-            className="w-full py-2.5 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[var(--text-secondary)] text-white rounded-xl text-sm font-medium transition-colors"
+            className="btn-brand w-full py-2.5 rounded-xl text-sm font-medium"
           >
             提交答案
           </button>
@@ -277,7 +275,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="border-t border-[rgba(255,255,255,0.05)]"
+            className="border-t border-token-surface"
           >
             {/* 对错提示 */}
             <div
@@ -298,13 +296,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
                 animate={{ opacity: 1 }}
                 className="px-4 md:px-5 pb-4"
               >
-                <div
-                  className="p-3 md:p-4 rounded-xl border"
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.02)",
-                    borderColor: "rgba(255,255,255,0.05)",
-                  }}
-                >
+                <div className="p-3 md:p-4 rounded-xl surface-panel">
                   <div className="flex items-center gap-2 mb-2">
                     <Lightbulb size={14} className="text-[#FF9500]" />
                     <span className="text-xs font-medium text-[#FF9500]">答案解析</span>
@@ -320,11 +312,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
             <div className="px-4 md:px-5 pb-4 flex gap-2">
               <button
                 onClick={handleRetry}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
-                  color: "var(--text-primary)",
-                }}
+                className="btn-ghost flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 <RotateCcw size={14} /> 再试一次
               </button>

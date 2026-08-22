@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -6,11 +6,81 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { splitContentWithQuizzes, QuizCard } from "@/components/quiz/QuizRenderer";
 import MermaidDiagram from "./MermaidDiagram";
 import { stripIllustrationMarkers } from "@shared/illustrationMarkers";
 
 export type MarkdownVariant = "default" | "reading";
+
+type CodeScheme = "light" | "dark";
+
+function resolveCodeScheme(el: HTMLElement): CodeScheme {
+  const host = el.closest(".reading-shell") ?? document.documentElement;
+  const scheme = getComputedStyle(host).getPropertyValue("--code-scheme").trim();
+  return scheme === "light" ? "light" : "dark";
+}
+
+function useCodeScheme(containerRef: React.RefObject<HTMLElement | null>) {
+  const [scheme, setScheme] = useState<CodeScheme>("dark");
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const update = () => setScheme(resolveCodeScheme(el));
+    update();
+
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    const readingShell = el.closest(".reading-shell");
+    if (readingShell) {
+      observer.observe(readingShell, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    }
+
+    return () => observer.disconnect();
+  }, [containerRef]);
+
+  return scheme;
+}
+
+interface HighlightedCodeProps {
+  language: string;
+  codeString: string;
+}
+
+function HighlightedCode({ language, codeString }: HighlightedCodeProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scheme = useCodeScheme(containerRef);
+  const prismStyle = scheme === "light" ? oneLight : vscDarkPlus;
+
+  return (
+    <div ref={containerRef}>
+      <SyntaxHighlighter
+        style={prismStyle}
+        language={language}
+        PreTag="div"
+        customStyle={{
+          margin: "1rem 0",
+          borderRadius: "12px",
+          fontSize: "0.85rem",
+          lineHeight: "1.6",
+          background: "var(--pre-bg)",
+          border: "1px solid var(--pre-border)",
+        }}
+      >
+        {codeString}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
 
 interface MarkdownRendererProps {
   content: string;
@@ -118,34 +188,13 @@ function getMarkdownComponents(
         return <MermaidDiagram chart={codeString} deferRender={deferMermaidRender} />;
       }
 
-      if (language) {
+      const isBlock = Boolean(language) || codeString.includes("\n");
+      if (isBlock) {
         return (
-          <SyntaxHighlighter
-            style={vscDarkPlus}
-            language={language}
-            PreTag="div"
-            customStyle={
-              isReading
-                ? {
-                    margin: "1rem 0",
-                    borderRadius: "12px",
-                    fontSize: "0.85rem",
-                    lineHeight: "1.6",
-                    background: "var(--pre-bg)",
-                    border: "1px solid var(--pre-border)",
-                  }
-                : {
-                    margin: "1rem 0",
-                    borderRadius: "12px",
-                    fontSize: "0.85rem",
-                    lineHeight: "1.6",
-                    background: "rgba(255, 255, 255, 0.03)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                  }
-            }
-          >
-            {codeString}
-          </SyntaxHighlighter>
+          <HighlightedCode
+            language={language || "text"}
+            codeString={codeString}
+          />
         );
       }
 

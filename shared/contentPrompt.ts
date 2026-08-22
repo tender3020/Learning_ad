@@ -66,7 +66,9 @@ ${today.keywords ? `【关键词】${today.keywords}` : ""}
 ${today.prerequisites ? `【前置要求】${today.prerequisites}` : ""}
 ${today.difficulty ? `【难度级别】${today.difficulty}` : ""}
 
-请用中文输出 Markdown，严格遵循 system prompt 中的章节结构要求。
+请用中文输出 Markdown，严格遵循 system prompt 中的章节结构要求（含当前阶段专用结构）。
+「本阶段内容结构」的每一条须对应一个 ## 二级标题，以便阅读页生成本章目录。
+开场钩子与比喻须与 system 中本课变体一致，避免每天使用相同套话。
 内容须与今日主题和阶段目标一致，体现循序渐进；若适用，包含代码示例、应用场景、练习与小结。`;
 }
 

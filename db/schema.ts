@@ -8,6 +8,9 @@ import {
   int,
   float,
   bigint,
+  json,
+  uniqueIndex,
+  index,
 } from "drizzle-orm/mysql-core";
 
 // Users table - 手机号登录
@@ -51,6 +54,7 @@ export const learningPlans = mysqlTable("learning_plans", {
   totalDays: int("total_days").notNull().default(30),
   status: mysqlEnum("status", ["active", "completed", "paused"]).default("active").notNull(),
   learningType: varchar("learning_type", { length: 30 }).default("abstract_logic").notNull(),
+  skillLevel: varchar("skill_level", { length: 10 }).default("l1").notNull(),
   currentDay: int("current_day").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
@@ -229,3 +233,193 @@ export const assessmentAnswers = mysqlTable("assessment_answers", {
 
 export type AssessmentAnswer = typeof assessmentAnswers.$inferSelect;
 export type InsertAssessmentAnswer = typeof assessmentAnswers.$inferInsert;
+
+// ============================================================================
+// Prompt 配置化：学习类型 + Prompt 片段 + 模板组装 + 版本 + 调用日志
+// ============================================================================
+
+// Learning Types - 学习类型配置（7 大类，替代 typeEngine 硬编码）
+export const learningTypes = mysqlTable(
+  "learning_types",
+  {
+    id: serial("id").primaryKey(),
+    typeKey: varchar("type_key", { length: 50 }).notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description"),
+    icon: varchar("icon", { length: 50 }),
+    color: varchar("color", { length: 20 }),
+    detectKeywords: json("detect_keywords"),
+    phaseStrategy: json("phase_strategy"),
+    sortOrder: int("sort_order").default(0).notNull(),
+    isActive: mysqlEnum("is_active", ["true", "false"]).default("true").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [uniqueIndex("uq_learning_types_key").on(t.typeKey)],
+);
+
+export type LearningTypeRow = typeof learningTypes.$inferSelect;
+export type InsertLearningType = typeof learningTypes.$inferInsert;
+
+// Prompt Components - Prompt 片段库（最小复用单元）
+export const promptComponents = mysqlTable(
+  "prompt_components",
+  {
+    id: serial("id").primaryKey(),
+    componentKey: varchar("component_key", { length: 100 }).notNull(),
+    category: mysqlEnum("category", [
+      "role",
+      "rule",
+      "constraint",
+      "format",
+      "example",
+      "context",
+    ]).notNull(),
+    scope: mysqlEnum("scope", ["common", "type", "purpose"]).notNull(),
+    typeKey: varchar("type_key", { length: 50 }),
+    purpose: mysqlEnum("purpose", [
+      "detect",
+      "assessment",
+      "outline",
+      "content",
+      "qa",
+    ]),
+    title: varchar("title", { length: 100 }).notNull(),
+    content: text("content").notNull(),
+    variables: json("variables"),
+    isActive: mysqlEnum("is_active", ["true", "false"]).default("true").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [uniqueIndex("uq_prompt_components_key").on(t.componentKey)],
+);
+
+export type PromptComponent = typeof promptComponents.$inferSelect;
+export type InsertPromptComponent = typeof promptComponents.$inferInsert;
+
+// Prompt Templates - 完整 Prompt 的组装配方（type + purpose 唯一）
+export const promptTemplates = mysqlTable(
+  "prompt_templates",
+  {
+    id: serial("id").primaryKey(),
+    templateKey: varchar("template_key", { length: 100 }).notNull(),
+    typeKey: varchar("type_key", { length: 50 }),
+    purpose: mysqlEnum("purpose", [
+      "detect",
+      "assessment",
+      "outline",
+      "content",
+      "qa",
+    ]).notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: varchar("description", { length: 255 }),
+    temperature: float("temperature").default(0.3).notNull(),
+    maxTokens: int("max_tokens").default(2000).notNull(),
+    responseFormat: mysqlEnum("response_format", [
+      "json_object",
+      "text",
+      "stream",
+    ]).default("text").notNull(),
+    isActive: mysqlEnum("is_active", ["true", "false"]).default("true").notNull(),
+    currentVersion: int("current_version").default(1).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("uq_prompt_templates_key").on(t.templateKey),
+    uniqueIndex("uq_prompt_templates_type_purpose").on(t.typeKey, t.purpose),
+  ],
+);
+
+export type PromptTemplate = typeof promptTemplates.$inferSelect;
+export type InsertPromptTemplate = typeof promptTemplates.$inferInsert;
+
+// Prompt Template Items - 模板与片段的组装关系（含顺序与 slot）
+export const promptTemplateItems = mysqlTable(
+  "prompt_template_items",
+  {
+    id: serial("id").primaryKey(),
+    templateId: bigint("template_id", { mode: "number", unsigned: true }).notNull(),
+    componentId: bigint("component_id", { mode: "number", unsigned: true }).notNull(),
+    sortOrder: int("sort_order").default(0).notNull(),
+    slot: mysqlEnum("slot", ["system", "user"]).default("system").notNull(),
+    overrideContent: text("override_content"),
+    isActive: mysqlEnum("is_active", ["true", "false"]).default("true").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_template_items_order").on(t.templateId, t.slot, t.sortOrder),
+    index("idx_template_items_template").on(t.templateId),
+  ],
+);
+
+export type PromptTemplateItem = typeof promptTemplateItems.$inferSelect;
+export type InsertPromptTemplateItem = typeof promptTemplateItems.$inferInsert;
+
+// Prompt Versions - 组装后的完整 Prompt 快照（回滚不受片段后续修改影响）
+export const promptVersions = mysqlTable(
+  "prompt_versions",
+  {
+    id: serial("id").primaryKey(),
+    templateId: bigint("template_id", { mode: "number", unsigned: true }).notNull(),
+    version: int("version").notNull(),
+    assembledSystem: text("assembled_system"),
+    assembledUser: text("assembled_user"),
+    temperature: float("temperature"),
+    maxTokens: int("max_tokens"),
+    changeNote: varchar("change_note", { length: 255 }),
+    createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_prompt_versions_tv").on(t.templateId, t.version)],
+);
+
+export type PromptVersion = typeof promptVersions.$inferSelect;
+export type InsertPromptVersion = typeof promptVersions.$inferInsert;
+
+// AI Generation Logs - 每次 AI 调用日志（含解析成功率，衡量 Prompt 稳定性）
+export const aiGenerationLogs = mysqlTable(
+  "ai_generation_logs",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("user_id", { mode: "number", unsigned: true }),
+    planId: bigint("plan_id", { mode: "number", unsigned: true }),
+    taskType: mysqlEnum("task_type", [
+      "detect",
+      "assessment",
+      "outline",
+      "content",
+      "qa",
+    ]).notNull(),
+    typeKey: varchar("type_key", { length: 50 }),
+    templateId: bigint("template_id", { mode: "number", unsigned: true }),
+    templateVersion: int("template_version"),
+    inputVars: json("input_vars"),
+    outputRaw: text("output_raw"),
+    outputParsed: json("output_parsed"),
+    parseSuccess: mysqlEnum("parse_success", ["true", "false"]),
+    retryCount: int("retry_count").default(0).notNull(),
+    status: mysqlEnum("status", ["success", "failed"]).notNull(),
+    errorMessage: text("error_message"),
+    promptTokens: int("prompt_tokens"),
+    completionTokens: int("completion_tokens"),
+    durationMs: int("duration_ms"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_ai_logs_user").on(t.userId),
+    index("idx_ai_logs_task").on(t.taskType, t.typeKey),
+    index("idx_ai_logs_created").on(t.createdAt),
+  ],
+);
+
+export type AiGenerationLog = typeof aiGenerationLogs.$inferSelect;
+export type InsertAiGenerationLog = typeof aiGenerationLogs.$inferInsert;

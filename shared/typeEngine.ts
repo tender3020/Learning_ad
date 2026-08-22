@@ -1,10 +1,7 @@
 /**
  * ============================================================================
- * Learning Type Engine - 学习类型判定与模板引擎
+ * Learning Type Engine - 学习类型定义与解析
  * ============================================================================
- *
- * 根据用户输入的学习目标，自动判定属于7种学习类型之一
- * 每种类型有独立的内容生成模板、大纲结构、评估题风格
  *
  * 7种类型：
  * 1. abstract_logic     - 抽象逻辑型（数学/物理/统计）
@@ -14,10 +11,12 @@
  * 5. model_apply        - 模型应用型（金融/经济/管理）
  * 6. perception         - 感知表达型（绘画/摄影/写作）
  * 7. practical          - 实践技艺型（烹饪/驾驶/急救）
+ *
+ * 注意：所有 AI Prompt（类型判定/评估题/大纲/内容/QA）均已迁移到数据库，
+ * 由 api/services/promptService.ts 组装。本文件只保留类型定义、
+ * AI 响应解析、token 预算与配图策略。
  * ============================================================================
  */
-
-import { allocatePhases, formatPhaseRoadmap } from "./outlinePhases";
 
 export type LearningType =
   | "abstract_logic"
@@ -48,494 +47,39 @@ export const TYPE_LABELS: Record<LearningType, { name: string; color: string; ic
   practical: { name: "实践技艺", color: "#5AC8FA", icon: "🔧", desc: "烹饪/驾驶/急救等安全操作流程" },
 };
 
-/** 类型判定提示词（给AI用） */
-export function getTypeDetectionPrompt(goal: string): string {
-  return `你是一个学习内容分类引擎。请判断以下用户输入属于哪种学习类型，只输出类型编号(1-7)和一句话理由。
-
-类型定义：
-- 1=抽象逻辑型：数学、理论物理、统计学等需要纸笔推导的纯理论
-- 2=操作逻辑型：编程、软件操作、命令行等需要在电脑上动手运行的内容
-- 3=语言学习型：任何自然语言的学习(英语、日语等)
-- 4=网络关联型：历史、地理、法律、政治、文学等以叙事和因果关联为主的内容
-- 5=模型应用型：经济学、金融、管理学、营销等以模型套用现实案例为主的内容
-- 6=感知表达型：绘画、摄影、写作、设计等以审美和创作为主的内容
-- 7=实践技艺型：烹饪、驾驶、急救、运动等以完成安全操作流程为主的内容
-
-判定优先级：
-- 含"代码/编程/软件/命令行"等词 → 优先判为2
-- 含"推导/证明/公式/定理"且不涉及编程 → 优先判为1
-- 自然语言学习 → 直接判为3
-- 涉及物理操作且强调安全 → 优先判为7
-- 核心是审美和创作 → 判为6
-- 核心是用模型分析现实 → 判为5
-- 核心是叙事和因果 → 判为4
-
-用户输入：${goal}
-
-输出格式（严格）：编号|类型英文名|一句话理由
-其中类型英文名对应：abstract_logic / operation_logic / language / network_assoc / model_apply / perception / practical`;
-}
-
 /** 将AI返回的字符串解析为 LearningType */
+const LEARNING_TYPE_PATTERN =
+  "abstract_logic|operation_logic|language|network_assoc|model_apply|perception|practical";
+
 export function parseTypeFromAIResponse(response: string): LearningType {
-  const trimmed = response.trim().toLowerCase();
+  const text = response.trim();
+  const pipeMatches = [
+    ...text.matchAll(new RegExp(`([1-7])\\s*\\|\\s*(${LEARNING_TYPE_PATTERN})`, "gi")),
+  ];
+  if (pipeMatches.length > 0) {
+    return pipeMatches[pipeMatches.length - 1][2].toLowerCase() as LearningType;
+  }
 
-  if (trimmed.includes("abstract_logic") || trimmed.includes("1")) return "abstract_logic";
-  if (trimmed.includes("operation_logic") || trimmed.includes("2")) return "operation_logic";
-  if (trimmed.includes("language") || trimmed.includes("3")) return "language";
-  if (trimmed.includes("network_assoc") || trimmed.includes("4")) return "network_assoc";
-  if (trimmed.includes("model_apply") || trimmed.includes("5")) return "model_apply";
-  if (trimmed.includes("perception") || trimmed.includes("6")) return "perception";
-  if (trimmed.includes("practical") || trimmed.includes("7")) return "practical";
+  const nameMatches = [...text.matchAll(new RegExp(`(${LEARNING_TYPE_PATTERN})`, "gi"))];
+  if (nameMatches.length > 0) {
+    return nameMatches[nameMatches.length - 1][1].toLowerCase() as LearningType;
+  }
 
-  return "abstract_logic"; // 默认
+  return "abstract_logic";
 }
 
-const MERMAID_SYNTAX_HINT = `
-【Mermaid 语法要求】
-在推导/概念/流程相关章节内，用标准 \`\`\`mermaid 代码块输出 flowchart 或 graph：
-- 第一行必须是 flowchart TD 或 graph LR（或 sequenceDiagram）
-- 含括号、冒号、斜杠的节点文字必须用双引号包裹，如 A["勾股定理"]
-- 不要使用 HTML 标签`;
-
-/** 根据学习类型获取系统提示词（内容生成） */
-export function getTypeSystemPrompt(type: LearningType, skillLevel: string): string {
-  const levelHint = getLevelHint(skillLevel);
-
-  // 通用约束：必须放在每个类型prompt开头
-  const commonConstraint = `
-【绝对禁止 - 必须遵守】
-1. 标题中禁止出现"200字以上""150字""300字"等字数提示文字
-2. 标题中禁止出现英文"Quiz"，练习部分直接用"练习题"即可
-3. 禁止输出任何本提示词中的格式标记、字数要求等指令性文字
-4. 只输出纯学习内容，不要让用户看到任何系统指令痕迹
-
-【公式格式要求 - 必须遵守】
-- 行内公式（短公式）：用 $...$ 包裹，如 $E = mc^2$
-- 块级公式（独立显示的公式）：用 $$...$$ 包裹，如 $$\\text{企业价值} = \\sum_{t=1}^{n} \\frac{FCF_t}{(1+r)^t}$$
-- 禁止用 \\[...\\] 或 \\(...\\) 或普通方括号 [ ... ] 包裹公式
-- 禁止在公式外额外加普通方括号 [ ]
-
-【配图意图标记 - 必须遵守】
-在 2-3 个最适合配图的章节末尾，各插入一行 HTML 注释（用户不可见，必须原样保留）：
-<!-- illustration: {"anchor":"正文中的完整句子20-40字","intent":"该段核心画面一句话","medium":"wanxiang或mermaid"} -->
-- anchor 必须是该章节正文中的完整句子，与 Markdown 完全一致
-- medium 为 wanxiang（场景插画）或 mermaid（概念/流程图）；抽象推导、代码流程用 mermaid，生活场景/对话/操作画面用 wanxiang
-- 每个关键章节最多 1 条，全文共 2-3 条`;
-
-  const prompts: Record<LearningType, string> = {
-    abstract_logic: `你是一位优秀的数学/物理导师。学习者水平：${skillLevel}（${levelHint}）。
-
-${commonConstraint}
-【抽象逻辑型 - 内容生成规范】
-学习建议：这类内容需用纸笔逐步推导，不能只用眼看。请准备好草稿纸，跟着推导过程自己写一遍。
-
-内容结构要求：
-
-开场先提出一个让读者感到"对，我确实没想过这个问题"的认知缺口——一个他们早就遇到过但从没深究的现象、一个反直觉的数值例子、或者一个看似简单但一追问就答不上来的问题。用2-3句话让读者产生"我需要一个解释"的感觉，然后自然引出今日核心概念。
-
-1. 今日核心概念：用生活化的比喻解释，200-300字，比喻要贴切
-2. 为什么你需要学这个：解释在知识体系中的位置，150-200字
-3. 推导过程：至少5-8步推导，每一步都要有详细解释
-4. 前置知识回顾：简要回顾推导中需要用到的前置概念，150字内
-5. 直观理解验证：用另一种方式解释同一个结论（几何意义/数值例子/反直觉特例），200字以上
-6. 随堂推导练习：1道基础引导题（带详细提示）+ 1道进阶挑战题
-7. 常见推导错误（至少3个）：描述典型错误+纠正+解释原因
-8. 今日小结：3-5句话总结核心内容
-
-${MERMAID_SYNTAX_HINT}
-在「推导过程」「今日核心概念」章节内至少输出 1 个 \`\`\`mermaid 代码块，展示概念或推导步骤关系。
-
-【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
-<!-- quiz
-question: ...
-A: ...
-B: ...
-C: ...
-D: ...
-correct: A
-explanation: ...
--->
-
-要求：Markdown格式输出，语言简洁清晰。在内容末尾自然地嵌入3-5道选择题`,
-
-    operation_logic: `你是一位优秀的编程/技术导师。学习者水平：${skillLevel}（${levelHint}）。
-
-${commonConstraint}
-【操作逻辑型 - 内容生成规范】
-学习建议：打开你的编辑器/终端/软件，边看边敲。光看是学不会的，运行成功才算真正掌握。
-
-内容结构要求：
-
-开场直接给一段简短的可运行代码，然后问读者：你觉得这段代码会输出什么？先让读者在脑子里跑一遍，再揭晓答案。不要一上来就讲概念——让代码本身成为钩子。如果读者猜错了，那种"为什么和我想的不一样"的好奇心就是今天最好的学习动力。
-
-1. 今日概念：用生活比喻解释核心概念，200-300字，让完全没有编程经验的人也能理解
-2. 为什么需要这个概念：如果没有它会怎样，解决了什么问题，150-200字
-3. 语法详解：展示完整语法结构，逐一解释每个部分
-4. 完整代码示例：带详细注释的完整示例，至少15-20行代码
-5. 逐行解读：解释每行代码在做什么
-6. 运行结果：贴出预期运行结果并解释，150字以上
-7. 动手练习（至少3道）：
-   - 练习1：照写运行（把上面的代码敲一遍并运行）
-   - 练习2：修改参数（改动1-2处，观察结果变化）
-   - 练习3：独立完成（略有不同的需求，自己写代码实现）
-8. 常见报错（至少3个）：典型报错原文+原因+具体修复方法
-9. 今日小结：总结今天学的概念和练过的操作
-
-${MERMAID_SYNTAX_HINT}
-在「今日概念」或代码流程相关章节内输出 1 个 \`\`\`mermaid 代码块（flowchart 或 sequenceDiagram）。
-
-【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
-<!-- quiz
-question: ...
-A: ...
-B: ...
-C: ...
-D: ...
-correct: A
-explanation: ...
--->
-
-要求：Markdown格式输出，代码示例必须可运行。在内容末尾自然地嵌入3-5道选择题`,
-
-    language: `你是一位优秀的语言教师。学习者水平：${skillLevel}（${levelHint}）。
-
-${commonConstraint}
-【语言学习型 - 内容生成规范】
-学习建议：听和说比看更重要。请大声跟读所有例句，最好用手机录下来对比原音。
-
-内容结构要求：
-
-开场用1-2句话把读者直接"丢进"一个具体场景——你刚到某国，拖着行李，手机快没电了，看到一家小店推门进去，老板看向你说了一句你大概能猜到意思的话。你怎么回？让读者先感受到"如果是我该怎么办"的代入感，然后自然过渡到今天要练的场景。告诉读者：今天的目标不是背完所有单词，是在这个场景里能说对三句话。
-
-1. 今日场景：描述一个真实生活中会遇到的场景，为什么要学这个场景的表达
-2. 场景对话：一个完整的场景对话，至少8-10个来回，附中文翻译和语气说明
-3. 核心句型（至少3个）：原文+中文释义+使用场景（200字）+替换练习+易错提醒
-4. 词汇卡片（至少8个）：表格形式，包含单词/短语、词性、释义、联想记忆/口诀、例句
-5. 语法点睛：讲解对话中出现的一个语法点，300字以上，附带正误对比例句
-6. 跟读练习：大声跟读的句子，标注重音和语调（至少5句）
-7. 情景自测：给一个类似场景，让用户自己组织对话，提供参考答案
-
-【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
-<!-- quiz
-question: ...
-A: ...
-B: ...
-C: ...
-D: ...
-correct: A
-explanation: ...
--->
-
-要求：Markdown格式输出，例句必须地道自然。在内容末尾自然地嵌入3-5道选择题`,
-
-    network_assoc: `你是一位优秀的叙事型导师。学习者水平：${skillLevel}（${levelHint}）。
-
-${commonConstraint}
-【网络关联型 - 内容生成规范】
-学习建议：重点是建立因果链，不是背时间地点。读完试着用自己的话复述一遍，看看逻辑是否通顺。
-
-内容结构要求：
-
-开场不要用"今天我们要学习XX"——直接进入一个具体的时刻和一个具体的人。描述一个画面感强的瞬间：一个在做关键决定的人、一个被卷入大事的小人物、一个看似普通但即将改变一切的日子。然后说"这就是今天的故事"，直接滑进叙事。读完之后，读者应该能自己感觉到"这件事为什么重要"——而不是你提前告诉他们。
-
-1. 今日叙事：用讲故事的方式完整展开，800-1200字，至少包含5处明确的因果关联(需要和故事自然过渡)，有具体人物和场景细节(需真实历史书籍)
-2. 影响与意义：解释为什么重要，对后世有什么影响，200字以上
-3. 关键要素卡：核心人物（详细说明角色/动机/关键抉择150字）+ 核心地点（地理重要性150字）+ 核心概念（用现代生活类比150字）
-4. 关系线索图：用文字描述一张因果网络(mermaid)，至少涉及6个节点
-5. 详细解读：逐条解释每个箭头为什么成立，300字以上
-6. 不同视角：从另一个国家/阶层/当事人的视角看待同一件事，200字以上
-7. 思考题：一个开放性问题，要求深度思考，不是一句话能回答的
-8. 延伸阅读线索：推荐1-2个可以继续深入了解的方向
-
-【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
-<!-- quiz
-question: ...
-A: ...
-B: ...
-C: ...
-D: ...
-correct: A
-explanation: ...
--->
-
-要求：Markdown格式输出，叙事生动有画面感。在内容末尾自然地嵌入3-5道选择题`,
-
-    model_apply: `你是一位优秀的商业分析导师。学习者水平：${skillLevel}（${levelHint}）。
-
-${commonConstraint}
-【模型应用型 - 内容生成规范】
-学习建议：模型是分析工具，学完立刻找现实案例去套用。学一个模型但不会用来解释新闻，等于白学。
-
-内容结构要求：
-
-开场直接扔出一个让人困惑的真实商业或经济现象——涨价了销量反而上升、明明品质更好却卖不过竞争对手、看似不理性的消费者行为背后有没有逻辑。让读者先感到"直觉不够用""我大概能猜几个原因但说不清楚"，然后说"这时候你就需要一个工具"，自然引出今日模型。
-
-1. 今日模型：模型名称+一句话定义+提出背景（200字）+核心公式（逐一解释符号）
-2. 为什么这个模型重要：改变了什么认知，在现实中有什么影响力，200字
-3. 手算案例：极简但完整的场景，带着用户一步步用模型算完
-   - 场景设定（150字）+ 已知条件 + 计算步骤 + 结果解读（200字）
-4. 现实套用（至少2个案例）：引入简化版财经新闻/生活场景，用模型拆解
-5. 模型的局限性：在什么情况下会失效，有哪些解释不了的现象，200字以上
-6. 模拟决策：给出一个需要做决策的场景，要求依据模型写150字以上分析
-7. 今日小结：总结模型核心逻辑和一个最重要的应用心法
-
-【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
-<!-- quiz
-question: ...
-A: ...
-B: ...
-C: ...
-D: ...
-correct: A
-explanation: ...
--->
-
-要求：Markdown格式输出，案例贴近现实。在内容末尾自然地嵌入3-5道选择题`,
-
-    perception: `你是一位优秀的艺术创作导师。学习者水平：${skillLevel}（${levelHint}）。
-
-${commonConstraint}
-【感知表达型 - 内容生成规范】
-学习建议：不要光看，马上动手。今天的目标是"完成"而不是"完美"。粗糙的完成品胜过完美的空想。
-
-内容结构要求：
-
-开场用"看一眼"的方式建立认知缺口——描述一个专业作品的效果和一个新手作品的效果，问读者："你能感觉到差距，但你能说出专业那个到底好在哪里吗？" 让读者意识到自己"看得见但说不清"，这就是今天要解决的事。然后直接给出今天的核心原则：完成比完美重要。粗糙但完整的产出胜过完美的空想。
-
-1. 今日目标：一个极其具体、可检验的产出目标（例如："用三种不同的排线方式画出三个球体的明暗关系"而不是"学素描"）
-2. 为什么从这个开始：解释这个练习在整个技能树中的位置，200字
-3. 示范与拆解：详细展示一个范例，拆解出关键要点
-   - 整体效果预览（150字）+ 要点1-4（每个200字，说明重要性和常见新手错误）
-4. 分步操作：至少5-6步，每步说明具体怎么做和注意什么
-5. 你的任务：明确的动手作业，产出要求具体，附带自检清单
-6. 新手常见问题（至少2个）：描述新手常犯错误+具体改进方法
-7. 进阶参考：大师作品推荐（说明为什么值得看）+ 练习变体建议
-
-【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
-<!-- quiz
-question: ...
-A: ...
-B: ...
-C: ...
-D: ...
-correct: A
-explanation: ...
--->
-
-要求：Markdown格式输出，强调动手产出。在内容末尾自然地嵌入3-5道选择题`,
-
-    practical: `你是一位优秀的实操技能导师。学习者水平：${skillLevel}（${levelHint}）。
-
-${commonConstraint}
-【实践技艺型 - 内容生成规范】
-学习建议：安全第一。建议先完整看一遍全部步骤，不打断，然后再动手。绝不跳步。
-
-内容结构要求：
-
-开场用一句话定调安全——"在碰任何东西之前，先记住几件绝对不能做的事。" 然后列出最重要的安全规则。安全内容讲完之后，再告诉读者今天的操作目标。强调一个关键原则：先在大脑里完整预演一遍流程，想清楚了再动手，绝不跳步。
-
-1. 安全须知（最重要）：列出操作前必须知道的安全事项，至少4-5条
-2. 准备工作：所需工具/材料（附替代方案）+ 环境要求 + 着装要求
-3. 分步操作：表格形式（步骤|操作内容|要点说明|常见错误），至少8-10步覆盖完整流程
-4. 关键技巧详解：挑选2-3个最容易出错的步骤，展开详细讲解（每段200字以上），讲清楚"为什么这样做"
-5. 常见失误与补救（至少2个）：描述错误操作+后果+补救方法
-6. 如何判断成功了：给出判断标准，让用户知道做成什么样算合格/优秀
-7. 情景判断：描述一个可能出现的意外/特殊情况，要求选出正确做法并说明原因
-8. 今日小结：回顾核心流程，强调最重要的安全要点和关键技巧
-
-【以下HTML注释格式是内容的一部分，必须原样输出到内容中】练习题使用以下格式嵌入（注意：<!-- 和 --> 是格式标记，必须保留）：
-<!-- quiz
-question: ...
-A: ...
-B: ...
-C: ...
-D: ...
-correct: A
-explanation: ...
--->
-
-要求：Markdown格式输出，强调安全规范，步骤不可跳。在内容末尾自然地嵌入3-5道选择题`,
+/** 大纲每天预估输出 token（紧凑 JSON），用于动态计算 max_tokens 上限 */
+export function getOutlineTokensPerDay(type: LearningType): number {
+  const perDay: Record<LearningType, number> = {
+    abstract_logic: 70,
+    operation_logic: 65,
+    language: 55,
+    network_assoc: 60,
+    model_apply: 65,
+    perception: 55,
+    practical: 55,
   };
-
-  return prompts[type] || prompts.abstract_logic;
-}
-
-/** 根据学习类型获取评估题目生成提示词 */
-export function getTypeAssessmentPrompt(type: LearningType, goal: string): string {
-  const prompts: Record<LearningType, string> = {
-    abstract_logic: `你是一位数学/物理评估专家。请为「${goal}」设计5道能力评估测试题。
-
-难度梯度要求：
-- 第1题(basic)：基础概念题，检验最基本的定义理解
-- 第2题(basic)：基础应用题，检验简单公式使用
-- 第3题(intermediate)：进阶题，检验对定理的理解和推导能力
-- 第4题(advanced)：高级题，检验综合运用多个概念的能力
-- 第5题(expert)：专家级题，检验深入理解和创新应用能力
-
-每道题需要是计算/推导类题目，选项应该是不同的答案/结论。`,
-
-    operation_logic: `你是一位编程技术评估专家。请为「${goal}」设计5道能力评估测试题。
-
-难度梯度要求：
-- 第1题(basic)：基础语法题，检验最基本的语法知识
-- 第2题(basic)：简单编程逻辑题，检验基本逻辑思维
-- 第3题(intermediate)：进阶题，检验对核心概念的理解
-- 第4题(advanced)：高级题，检验综合运用多个知识点的能力
-- 第5题(expert)：专家级题，检验对底层原理的理解
-
-每道题应该是代码阅读/程序输出类题目，选项应该是不同的输出结果/代码行为。`,
-
-    language: `你是一位语言评估专家。请为「${goal}」设计5道能力评估测试题。
-
-难度梯度要求：
-- 第1题(basic)：基础词汇题，检验最基本的单词/短语理解
-- 第2题(basic)：基础语法题，检验基本句型结构
-- 第3题(intermediate)：进阶题，检验语法和词汇的综合运用
-- 第4题(advanced)：高级题，检验对语境和文化差异的理解
-- 第5题(expert)：专家级题，检验地道的表达和高级语法
-
-每道题应该是情景对话/语法填空/阅读理解类，选项应该是有迷惑性的常见错误表达。`,
-
-    network_assoc: `你是一位综合知识评估专家。请为「${goal}」设计5道能力评估测试题。
-
-难度梯度要求：
-- 第1题(basic)：基础事实题，检验最基本的历史/文化常识
-- 第2题(basic)：基础关系题，检验简单的因果关联
-- 第3题(intermediate)：进阶题，检验对复杂因果链的理解
-- 第4题(advanced)：高级题，检验多视角分析和比较能力
-- 第5题(expert)：专家级题，检验深度理解和批判性思维
-
-每道题应该是历史/文化/社会分析类，选项应该是有迷惑性的常见误解。`,
-
-    model_apply: `你是一位商业分析评估专家。请为「${goal}」设计5道能力评估测试题。
-
-难度梯度要求：
-- 第1题(basic)：基础概念题，检验最基本的模型定义
-- 第2题(basic)：简单应用题，检验基础套用能力
-- 第3题(intermediate)：进阶题，检验对模型假设的理解
-- 第4题(advanced)：高级题，检验综合分析能力
-- 第5题(expert)：专家级题，检验模型创新和批判能力
-
-每道题应该是案例分析/模型应用类，选项应该是有迷惑性的错误分析思路。`,
-
-    perception: `你是一位艺术创作评估专家。请为「${goal}」设计5道能力评估测试题。
-
-难度梯度要求：
-- 第1题(basic)：基础概念题，检验最基本的术语和工具认知
-- 第2题(basic)：基础审美题，检验基本的审美判断
-- 第3题(intermediate)：进阶题，检验对技法原理的理解
-- 第4题(advanced)：高级题，检验综合创作能力
-- 第5题(expert)：专家级题，检验深度理解和创新表达
-
-每道题应该是作品分析/技法判断/创作决策类，选项应该是有迷惑性的常见错误。`,
-
-    practical: `你是一位实操技能评估专家。请为「${goal}」设计5道能力评估测试题。
-
-难度梯度要求：
-- 第1题(basic)：基础安全题，检验最基本的安全常识
-- 第2题(basic)：基础流程题，检验基本操作步骤
-- 第3题(intermediate)：进阶题，检验对关键技巧的掌握
-- 第4题(advanced)：高级题，检验应急处理和问题解决能力
-- 第5题(expert)：专家级题，检验综合判断和创新方法
-
-每道题应该是安全判断/操作决策/应急处理类，选项应该是有迷惑性的危险做法。`,
-  };
-
-  return prompts[type] || prompts.abstract_logic;
-}
-
-/** 根据学习类型获取大纲生成提示词 */
-export function getTypeOutlinePrompt(type: LearningType, goal: string, totalDays: number, skillLevel: string): string {
-  const levelHint = getLevelHint(skillLevel);
-  const phases = allocatePhases(type, totalDays);
-  const roadmap = formatPhaseRoadmap(phases);
-
-  const titleRules = `
-【标题要求】（必须遵守）
-1. 每天的 title 必须是该阶段内一个**具体且唯一**的子主题
-2. 相邻两天标题**不能重复、不能相似**
-3. 禁止写成笼统表述（如「第1天学习」「继续学习」「基础词汇2」）
-4. 每天需设置可测量的 learningObjective`;
-
-  const outlines: Record<LearningType, string> = {
-    abstract_logic: `为「${goal}」制定${totalDays}天的大纲。学习者水平：${skillLevel}（${levelHint}）。
-这是【抽象逻辑型】内容。
-
-【分阶段学习路线图】（必须严格按以下天数划分，daily 条目必须落入对应阶段）：
-${roadmap}
-
-每天包含：核心概念 + 推导过程 + 练习题
-${titleRules}`,
-
-    operation_logic: `为「${goal}」制定${totalDays}天的大纲。学习者水平：${skillLevel}（${levelHint}）。
-这是【操作逻辑型】内容。
-
-【分阶段学习路线图】（必须严格按以下天数划分）：
-${roadmap}
-
-每天包含：概念讲解 + 完整代码 + 练习题
-${titleRules}`,
-
-    language: `为「${goal}」制定${totalDays}天的大纲。学习者水平：${skillLevel}（${levelHint}）。
-这是【语言学习型】内容。
-
-【分阶段学习路线图】（必须严格按以下天数划分）：
-${roadmap}
-
-${titleRules}
-正确示例："机场入境与海关对话""定语从句与关系代词""餐厅点餐常用表达"`,
-
-    network_assoc: `为「${goal}」制定${totalDays}天的大纲。学习者水平：${skillLevel}（${levelHint}）。
-这是【网络关联型】内容。
-
-【分阶段学习路线图】（必须严格按以下天数划分）：
-${roadmap}
-
-每天包含：叙事内容 + 关键要素 + 关系线索 + 思考题
-${titleRules}`,
-
-    model_apply: `为「${goal}」制定${totalDays}天的大纲。学习者水平：${skillLevel}（${levelHint}）。
-这是【模型应用型】内容。
-
-【分阶段学习路线图】（必须严格按以下天数划分）：
-${roadmap}
-
-每天包含：模型介绍 + 案例 + 计算/分析 + 现实套用
-${titleRules}`,
-
-    perception: `为「${goal}」制定${totalDays}天的大纲。学习者水平：${skillLevel}（${levelHint}）。
-这是【感知表达型】内容。
-
-【分阶段学习路线图】（必须严格按以下天数划分）：
-${roadmap}
-
-每天包含：目标设定 + 示范拆解 + 分步指导 + 动手任务
-${titleRules}`,
-
-    practical: `为「${goal}」制定${totalDays}天的大纲。学习者水平：${skillLevel}（${levelHint}）。
-这是【实践技艺型】内容。
-
-【分阶段学习路线图】（必须严格按以下天数划分）：
-${roadmap}
-
-每天包含：安全要点 + 准备工作 + 分步操作 + 练习
-${titleRules}`,
-  };
-
-  return outlines[type];
-}
-
-/** 获取等级提示 */
-function getLevelHint(level: string): string {
-  const hints: Record<string, string> = {
-    l1: "零基础，从最基础概念讲起，详细铺垫",
-    l2: "入门，简要回顾基础聚焦核心知识",
-    l3: "中级，跳过基础进阶内容+实战案例",
-    l4: "进阶，深入高级主题前沿技术",
-    l5: "高级，专家级内容最佳实践架构设计",
-  };
-  return hints[level] || hints.l3;
+  return perDay[type] ?? 60;
 }
 
 export type VisualMedium = "wanxiang" | "mermaid";

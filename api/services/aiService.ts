@@ -1,14 +1,13 @@
 import {
   type LearningType,
-  getTypeDetectionPrompt,
   parseTypeFromAIResponse,
-  getTypeSystemPrompt,
-  getTypeAssessmentPrompt,
+  getOutlineTokensPerDay,
 } from "@shared/typeEngine";
 import { allocatePhases, type AllocatedPhase } from "@shared/outlinePhases";
 import { validateOutline } from "@shared/outlineValidation";
 import type { OutlineItem } from "@shared/outlineTypes";
 import { chatCompletion } from "../lib/deepseek";
+import { assemblePrompt, logAIGeneration } from "./promptService";
 
 export type { OutlineItem } from "@shared/outlineTypes";
 
@@ -26,17 +25,29 @@ export type AssessmentQuestion = {
 
 export async function detectLearningType(
   goal: string,
+  userId?: number,
 ): Promise<{ type: LearningType; reason: string }> {
+  const startedAt = Date.now();
+  const assembled = await assemblePrompt(null, "detect", { goal });
+  if (!assembled) {
+    throw new Error("类型判定 Prompt 未配置：请在 prompt_templates 中配置 purpose=detect 的模板");
+  }
+
   const response = await chatCompletion({
     messages: [
-      { role: "system", content: getTypeDetectionPrompt(goal) },
-      { role: "user", content: goal },
+      { role: "system", content: assembled.system },
+      { role: "user", content: assembled.user || `学习目标：${goal}\n只输出一行：编号|英文名|理由` },
     ],
-    temperature: 0.3,
-    max_tokens: 200,
+    temperature: assembled.temperature,
+    max_tokens: assembled.maxTokens,
   });
 
   if (!response.ok) {
+    void logAIGeneration({
+      userId, taskType: "detect", status: "failed",
+      templateId: assembled?.templateId, templateVersion: assembled?.version,
+      inputVars: { goal }, errorMessage: `HTTP ${response.status}`, durationMs: Date.now() - startedAt,
+    });
     return { type: "abstract_logic", reason: "默认类型" };
   }
 
@@ -53,6 +64,12 @@ export async function detectLearningType(
         ? parts[1].trim()
         : "基于关键词匹配";
 
+  void logAIGeneration({
+    userId, taskType: "detect", typeKey: type, status: "success",
+    templateId: assembled?.templateId, templateVersion: assembled?.version,
+    inputVars: { goal }, outputRaw: content, durationMs: Date.now() - startedAt,
+  });
+
   return { type, reason };
 }
 
@@ -61,51 +78,203 @@ export async function generateOutline(
   totalDays: number,
   learningType: LearningType = "abstract_logic",
   skillLevel: string = "l1",
+  userId?: number,
+  planId?: number,
 ): Promise<OutlineItem[]> {
   const phases = allocatePhases(learningType, totalDays);
-  let outline = await expandAllPhasesSequential(goal, learningType, skillLevel, phases);
+  let outline = await generateFullOutlineOnce(goal, learningType, skillLevel, totalDays, phases, userId, planId);
 
-  let validation = validateOutline(outline, totalDays);
-  if (!validation.valid) {
-    console.warn("[generateOutline] 校验未通过，重试:", validation.errors.join("; "));
-    outline = await expandAllPhasesSequential(goal, learningType, skillLevel, phases, 0.35);
-    validation = validateOutline(outline, totalDays);
-    if (!validation.valid) {
-      console.warn("[generateOutline] 重试后仍有问题:", validation.errors.join("; "));
-    }
+  if (outline.length < Math.ceil(totalDays * 0.6)) {
+    const repaired = await repairMissingOutlineDays(
+      goal,
+      learningType,
+      skillLevel,
+      phases,
+      outline,
+      totalDays,
+    );
+    if (repaired.length > outline.length) outline = repaired;
   }
+
+  outline = fillMissingOutlineDays(outline, phases, totalDays);
 
   if (outline.length === 0) {
     throw new Error("大纲生成失败：AI 未返回有效数据，请重试");
   }
 
+  const validation = validateOutline(outline, totalDays);
+  if (!validation.valid) {
+    console.warn("[generateOutline] 校验告警:", validation.errors.join("; "));
+  }
+
   return outline.slice(0, totalDays);
 }
 
-async function expandAllPhasesSequential(
+async function generateFullOutlineOnce(
+  goal: string,
+  learningType: LearningType,
+  skillLevel: string,
+  totalDays: number,
+  phases: AllocatedPhase[],
+  userId?: number,
+  planId?: number,
+): Promise<OutlineItem[]> {
+  const startedAt = Date.now();
+  const assembled = await assemblePrompt(learningType, "outline", { goal, totalDays, skillLevel });
+  if (!assembled) {
+    throw new Error(`大纲 Prompt 未配置：请在 prompt_templates 中配置 outline:${learningType} 模板`);
+  }
+
+  let response: Response;
+  try {
+    response = await chatCompletion(
+      {
+        messages: [
+          {
+            role: "system",
+            content: assembled.system,
+          },
+          {
+            role: "user",
+            content:
+              assembled.user ||
+              `为「${goal}」生成 ${totalDays} 天紧凑大纲。
+
+请先通读 system 中的「分阶段大纲规划」，按每个阶段综合评估并分配该阶段内每天的主题，再一次输出全部 ${totalDays} 天 JSON。
+第 d 天的 title/obj 必须属于 d 所在阶段；阶段内递进、阶段间衔接。第 N 天承接第 N-1 天。`,
+          },
+        ],
+        temperature: assembled.temperature,
+        max_tokens: Math.min(assembled.maxTokens, 400 + totalDays * getOutlineTokensPerDay(learningType)),
+        response_format: { type: "json_object" },
+      },
+      { signal: abortAfter(120_000) },
+    );
+  } catch {
+    void logAIGeneration({
+      userId, planId, taskType: "outline", typeKey: learningType, status: "failed",
+      templateId: assembled?.templateId, templateVersion: assembled?.version,
+      inputVars: { goal, totalDays, skillLevel }, errorMessage: "请求异常/超时", durationMs: Date.now() - startedAt,
+    });
+    return [];
+  }
+
+  if (!response.ok) {
+    void logAIGeneration({
+      userId, planId, taskType: "outline", typeKey: learningType, status: "failed",
+      templateId: assembled?.templateId, templateVersion: assembled?.version,
+      inputVars: { goal, totalDays, skillLevel }, errorMessage: `HTTP ${response.status}`, durationMs: Date.now() - startedAt,
+    });
+    return [];
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const rawContent = data.choices?.[0]?.message?.content || "";
+  const parsed = parseOutlineJson(rawContent);
+  const result = parsed
+    .filter((item) => item.dayNumber >= 1 && item.dayNumber <= totalDays)
+    .map((item) => {
+      const phase = phases.find((p) => item.dayNumber >= p.startDay && item.dayNumber <= p.endDay);
+      return phase ? normalizeOutlineItem(item, phase) : item;
+    });
+
+  void logAIGeneration({
+    userId, planId, taskType: "outline", typeKey: learningType,
+    status: result.length > 0 ? "success" : "failed",
+    templateId: assembled?.templateId, templateVersion: assembled?.version,
+    inputVars: { goal, totalDays, skillLevel },
+    outputRaw: rawContent.slice(0, 8000),
+    outputParsed: { days: result.length },
+    parseSuccess: parsed.length > 0,
+    promptTokens: data.usage?.prompt_tokens,
+    completionTokens: data.usage?.completion_tokens,
+    durationMs: Date.now() - startedAt,
+  });
+
+  return result;
+}
+
+function abortAfter(ms: number): AbortSignal | undefined {
+  try {
+    return AbortSignal.timeout(ms);
+  } catch {
+    return undefined;
+  }
+}
+
+function fillMissingOutlineDays(
+  outline: OutlineItem[],
+  phases: AllocatedPhase[],
+  totalDays: number,
+): OutlineItem[] {
+  return mergePhaseOutlines(phases, [outline], totalDays);
+}
+
+async function repairMissingOutlineDays(
   goal: string,
   learningType: LearningType,
   skillLevel: string,
   phases: AllocatedPhase[],
-  temperature = 0.4,
+  existing: OutlineItem[],
+  totalDays: number,
 ): Promise<OutlineItem[]> {
-  const phaseResults: OutlineItem[][] = [];
-  let prevLastTitle: string | undefined;
+  const have = new Set(existing.map((item) => item.dayNumber));
+  const missing: number[] = [];
+  for (let day = 1; day <= totalDays; day++) {
+    if (!have.has(day)) missing.push(day);
+  }
+  if (missing.length === 0) return existing;
 
-  for (const phase of phases) {
-    const items = await expandPhaseOutline(
-      goal,
-      learningType,
-      skillLevel,
-      phase,
-      prevLastTitle,
-      temperature,
+  const missingByPhase = missing.map((day) => {
+    const phase = phases.find((p) => day >= p.startDay && day <= p.endDay);
+    return phase ? `第${day}天→阶段「${phase.name}」（${phase.outlineTitleGuide}；禁止：${phase.outlineAvoid}）` : `第${day}天`;
+  });
+
+  const known = existing
+    .slice()
+    .sort((a, b) => a.dayNumber - b.dayNumber)
+    .slice(0, 12)
+    .map((item) => `D${item.dayNumber}:${item.title}`)
+    .join("；");
+
+  let response: Response;
+  try {
+    response = await chatCompletion(
+      {
+        messages: [
+          {
+            role: "system",
+            content: `为「${goal}」（${learningType}，水平 ${skillLevel}）补全缺失学习天。只返回 JSON：{"o":[{"d":1,"t":"主题","obj":"目标","k":"关键词"}]}
+必须衔接已有主题，禁止重复。缺失天须符合其所属阶段约束：
+${missingByPhase.join("\n")}`,
+          },
+          {
+            role: "user",
+            content: `已有：${known || "无"}\n请只生成这些天：${missing.join(",")} `,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: Math.min(2048, 200 + missing.length * getOutlineTokensPerDay(learningType)),
+        response_format: { type: "json_object" },
+      },
+      { signal: abortAfter(60_000) },
     );
-    phaseResults.push(items);
-    if (items.length > 0) prevLastTitle = items[items.length - 1]?.title;
+  } catch {
+    return existing;
   }
 
-  return mergePhaseOutlines(phases, phaseResults, phases.reduce((s, p) => s + p.dayCount, 0));
+  if (!response.ok) return existing;
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const extra = parseOutlineJson(data.choices?.[0]?.message?.content || "").map((item) => {
+    const phase = phases.find((p) => item.dayNumber >= p.startDay && item.dayNumber <= p.endDay);
+    return phase ? normalizeOutlineItem(item, phase) : item;
+  });
+  return [...existing, ...extra];
 }
 
 function mergePhaseOutlines(
@@ -148,71 +317,6 @@ function mergePhaseOutlines(
   return merged;
 }
 
-async function expandPhaseOutline(
-  goal: string,
-  learningType: LearningType,
-  skillLevel: string,
-  phase: AllocatedPhase,
-  prevPhaseLastTitle?: string,
-  temperature = 0.4,
-): Promise<OutlineItem[]> {
-  const prevHint = prevPhaseLastTitle
-    ? `\n上一阶段最后一天主题：「${prevPhaseLastTitle}」。本阶段第 ${phase.startDay} 天应在此基础上递进，不要重复相同主题。`
-    : "";
-  const dayRange =
-    phase.dayCount === 1
-      ? `第 ${phase.startDay} 天（仅 1 天）`
-      : `第 ${phase.startDay} 至 ${phase.endDay} 天（共 ${phase.dayCount} 天）`;
-
-  const response = await chatCompletion({
-    messages: [
-      {
-        role: "system",
-        content: `你是课程大纲设计专家。为学习目标「${goal}」展开一个学习阶段的大纲。
-学习类型：${learningType}，学习者水平：${skillLevel}。
-
-【输出格式】只返回 JSON 数组，不要 markdown 代码块：
-[{"dayNumber": ${phase.startDay}, "title": "具体主题", "goal": "当日目标", "keywords": "词1, 词2", "estimatedMinutes": 30, "learningObjective": "可测量的当日目标", "prerequisites": "前置天编号", "phaseName": "${phase.name}", "phaseOrder": ${phase.order}, "difficulty": "${phase.difficulty}"}]
-
-【要求】
-1. 必须输出恰好 ${phase.dayCount} 条，dayNumber 从 ${phase.startDay} 到 ${phase.endDay}
-2. title 必须具体唯一，禁止「第N天学习」「继续学习」等笼统标题
-3. 相邻天主题递进，同一阶段内由浅入深
-4. prerequisites 填写前置 dayNumber（逗号分隔）或前置知识点短语`,
-      },
-      {
-        role: "user",
-        content: `阶段「${phase.name}」(${dayRange})
-阶段目标：${phase.goal}
-建议子主题方向：${phase.topicHints.join("、")}${prevHint}
-
-请生成该阶段 ${phase.dayCount} 天的完整大纲 JSON。`,
-      },
-    ],
-    temperature,
-    max_tokens: Math.min(8192, 400 + phase.dayCount * 280),
-  });
-
-  if (!response.ok) {
-    return buildFallbackPhaseOutline(goal, phase);
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = data.choices?.[0]?.message?.content || "";
-  const parsed = parseOutlineJson(content);
-
-  if (parsed.length >= phase.dayCount) {
-    return parsed
-      .filter((item) => item.dayNumber >= phase.startDay && item.dayNumber <= phase.endDay)
-      .slice(0, phase.dayCount)
-      .map((item) => normalizeOutlineItem(item, phase));
-  }
-
-  return buildFallbackPhaseOutline(goal, phase);
-}
-
 function parseOutlineJson(content: string): OutlineItem[] {
   try {
     let jsonStr = content.trim();
@@ -223,19 +327,21 @@ function parseOutlineJson(content: string): OutlineItem[] {
       jsonStr = jsonStr.slice(0, lastArrayEnd + 1);
     }
     const parsed = JSON.parse(jsonStr);
-    const outline = Array.isArray(parsed) ? parsed : parsed.outline;
+    const outline = Array.isArray(parsed)
+      ? parsed
+      : parsed.o || parsed.outline || parsed.days || parsed.data;
     if (!Array.isArray(outline)) return [];
     return outline.map((item: Record<string, unknown>, index: number) => ({
-      dayNumber: (item.dayNumber as number) || index + 1,
-      title: String(item.title || ""),
-      goal: String(item.goal || item.learningObjective || ""),
-      keywords: String(item.keywords || ""),
+      dayNumber: Number(item.d ?? item.dayNumber ?? index + 1),
+      title: String(item.t || item.title || ""),
+      goal: String(item.obj || item.goal || item.learningObjective || ""),
+      keywords: String(item.k || item.keywords || ""),
       estimatedMinutes: (item.estimatedMinutes as number) || 30,
       phaseName: item.phaseName as string | undefined,
       phaseOrder: item.phaseOrder as number | undefined,
       difficulty: item.difficulty as OutlineItem["difficulty"],
       prerequisites: item.prerequisites as string | undefined,
-      learningObjective: String(item.learningObjective || item.goal || ""),
+      learningObjective: String(item.obj || item.learningObjective || item.goal || ""),
     }));
   } catch {
     return [];
@@ -259,87 +365,122 @@ function normalizeOutlineItem(item: OutlineItem, phase: AllocatedPhase): Outline
   };
 }
 
-function buildFallbackPhaseOutline(goal: string, phase: AllocatedPhase): OutlineItem[] {
-  const items: OutlineItem[] = [];
-  for (let d = phase.startDay; d <= phase.endDay; d++) {
-    const idx = d - phase.startDay;
-    const topic = phase.topicHints[idx % phase.topicHints.length];
-    items.push({
-      dayNumber: d,
-      title: `${topic}`,
-      goal: `${goal} — ${phase.goal}`,
-      keywords: phase.topicHints.join(", "),
-      estimatedMinutes: 30,
-      phaseName: phase.name,
-      phaseOrder: phase.order,
-      difficulty: phase.difficulty,
-      prerequisites: d > 1 ? String(d - 1) : undefined,
-      learningObjective: `掌握${topic}相关要点`,
-    });
-  }
-  return items;
-}
-
 export async function generateAssessmentQuestions(
   goal: string,
   learningType: LearningType = "abstract_logic",
+  userId?: number,
 ): Promise<AssessmentQuestion[]> {
-  const typePrompt = getTypeAssessmentPrompt(learningType, goal);
+  const questions = await requestAssessmentQuestions(goal, learningType, 0.2, userId);
+  if (questions) return questions;
 
-  const response = await chatCompletion({
-    messages: [
+  const retry = await requestAssessmentQuestions(goal, learningType, 0.1, userId, 1);
+  if (!retry) {
+    throw new Error("评估题目生成失败，请重试");
+  }
+  return retry;
+}
+
+async function requestAssessmentQuestions(
+  goal: string,
+  learningType: LearningType,
+  temperature: number,
+  userId?: number,
+  retryCount = 0,
+): Promise<AssessmentQuestion[] | null> {
+  const startedAt = Date.now();
+  const assembled = await assemblePrompt(learningType, "assessment", { goal });
+  if (!assembled) {
+    throw new Error(`评估题 Prompt 未配置：请在 prompt_templates 中配置 assessment:${learningType} 模板`);
+  }
+
+  const log = (fields: { status: "success" | "failed"; parseSuccess?: boolean; outputRaw?: string; errorMessage?: string; usage?: { prompt_tokens?: number; completion_tokens?: number } }) =>
+    logAIGeneration({
+      userId, taskType: "assessment", typeKey: learningType,
+      status: fields.status,
+      templateId: assembled?.templateId, templateVersion: assembled?.version,
+      inputVars: { goal }, outputRaw: fields.outputRaw?.slice(0, 8000),
+      parseSuccess: fields.parseSuccess, retryCount,
+      errorMessage: fields.errorMessage,
+      promptTokens: fields.usage?.prompt_tokens,
+      completionTokens: fields.usage?.completion_tokens,
+      durationMs: Date.now() - startedAt,
+    });
+
+  let response: Response;
+  try {
+    response = await chatCompletion(
       {
-        role: "system",
-        content: `${typePrompt}
-
-请严格按以下 JSON 格式返回，不要包含任何其他内容：
-[{"questionIndex": 1, "question": "题目", "optionsA": "A选项", "optionsB": "B选项", "optionsC": "C选项", "optionsD": "D选项", "correctAnswer": "A", "explanation": "解析", "difficulty": "basic"}]
-
-注意：
-1. 只返回 JSON 数组
-2. 题目要覆盖目标知识领域的核心概念
-3. 选项要有迷惑性，不能太明显
-4. explanation 要详细说明为什么正确、为什么其他选项错误
-5. 难度梯度：第1-2题basic，第3题intermediate，第4题advanced，第5题expert`,
+        messages: [
+          {
+            role: "system",
+            content: assembled.system,
+          },
+          {
+            role: "user",
+            content: assembled.user || `为「${goal}」出 5 道短选择题，只考该目标知识点。`,
+          },
+        ],
+        temperature,
+        max_tokens: assembled.maxTokens,
+        response_format: { type: "json_object" },
       },
-      { role: "user", content: `请为「${goal}」设计 5 道能力评估测试题` },
-    ],
-    temperature: 0.6,
-    max_tokens: 4000,
-    response_format: { type: "json_object" },
-  });
+      { signal: abortAfter(90_000) },
+    );
+  } catch {
+    void log({ status: "failed", errorMessage: "请求异常/超时" });
+    return null;
+  }
 
   if (!response.ok) {
-    return getDefaultAssessmentQuestions(goal);
+    void log({ status: "failed", errorMessage: `HTTP ${response.status}` });
+    return null;
   }
 
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
   const content = data.choices?.[0]?.message?.content || "";
 
   try {
     const parsed = JSON.parse(content);
-    const questions = Array.isArray(parsed) ? parsed : parsed.questions || parsed.data || [];
+    const raw = Array.isArray(parsed)
+      ? parsed
+      : parsed.q || parsed.questions || parsed.data || [];
 
-    if (Array.isArray(questions) && questions.length >= 3) {
-      return questions.slice(0, 5).map((q: Record<string, unknown>, i: number) => ({
-        questionIndex: (q.questionIndex as number) || i + 1,
-        question: (q.question as string) || `题目 ${i + 1}`,
-        optionsA: (q.optionsA as string) || (q.optionA as string) || (q.a as string) || "",
-        optionsB: (q.optionsB as string) || (q.optionB as string) || (q.b as string) || "",
-        optionsC: (q.optionsC as string) || (q.optionC as string) || (q.c as string) || "",
-        optionsD: (q.optionsD as string) || (q.optionD as string) || (q.d as string) || "",
-        correctAnswer: (q.correctAnswer as string) || (q.correct as string) || "A",
-        explanation: (q.explanation as string) || "",
-        difficulty: ((q.difficulty as string) || "basic") as AssessmentQuestion["difficulty"],
-      }));
+    if (!Array.isArray(raw) || raw.length < 5) {
+      void log({ status: "failed", parseSuccess: false, outputRaw: content, errorMessage: "题目数量不足", usage: data.usage });
+      return null;
     }
-  } catch {
-    // JSON 解析失败
-  }
 
-  return getDefaultAssessmentQuestions(goal);
+    const questions = raw.slice(0, 5).map((item: Record<string, unknown>, i: number) => ({
+      questionIndex: Number(item.i ?? item.questionIndex ?? i + 1),
+      question: String(item.q || item.question || ""),
+      optionsA: String(item.a || item.optionsA || item.optionA || ""),
+      optionsB: String(item.b || item.optionsB || item.optionB || ""),
+      optionsC: String(item.c || item.optionsC || item.optionC || ""),
+      optionsD: String((item as { d?: unknown }).d || item.optionsD || item.optionD || ""),
+      correctAnswer: String(item.ans || item.correctAnswer || item.correct || "A"),
+      explanation: String(item.e || item.explanation || ""),
+      difficulty: String(item.lv || item.difficulty || "basic") as AssessmentQuestion["difficulty"],
+    }));
+
+    const offTopic = /如何学习|遇到困难|理论结合实践|最有效的方法|完全陌生的领域/;
+    if (questions.some((q) => !q.question.trim() || offTopic.test(q.question))) {
+      void log({ status: "failed", parseSuccess: true, outputRaw: content, errorMessage: "检测到偏题/空题", usage: data.usage });
+      return null;
+    }
+    if (questions.some((q) => !q.optionsA || !q.optionsB || !q.optionsC || !q.optionsD)) {
+      void log({ status: "failed", parseSuccess: true, outputRaw: content, errorMessage: "选项缺失", usage: data.usage });
+      return null;
+    }
+
+    void log({ status: "success", parseSuccess: true, outputRaw: content, usage: data.usage });
+    return questions;
+  } catch {
+    void log({ status: "failed", parseSuccess: false, outputRaw: content, errorMessage: "JSON 解析失败", usage: data.usage });
+    return null;
+  }
 }
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -353,36 +494,30 @@ export interface DayQAContext {
   markdownContent: string;
 }
 
-export function buildQASystemPrompt(ctx: DayQAContext): string {
-  const typeLabel =
-    ({
-      abstract_logic: "抽象逻辑型",
-      operation_logic: "操作逻辑型",
-      language: "语言学习型",
-      network_assoc: "网络关联型",
-      model_apply: "模型应用型",
-      perception: "感知表达型",
-      practical: "实践技艺型",
-    } as Record<string, string>)[ctx.learningType] || ctx.learningType;
+const TYPE_LABEL_MAP: Record<string, string> = {
+  abstract_logic: "抽象逻辑型",
+  operation_logic: "操作逻辑型",
+  language: "语言学习型",
+  network_assoc: "网络关联型",
+  model_apply: "模型应用型",
+  perception: "感知表达型",
+  practical: "实践技艺型",
+};
 
-  return `你是一位耐心的 AI 学习导师，正在辅导学习者完成今日课程。
-
-【学习定位】
-- 整体目标：${ctx.planGoal}
-- 当前进度：第 ${ctx.dayNumber} 天
-- 今日主题：${ctx.dayTitle}
-- 今日目标：${ctx.dayGoal || "（见下方学习材料）"}
-- 学习类型：${typeLabel}
-
-【今日学习材料 — 回答必须以此为准】
-${ctx.markdownContent}
-
-【回答规则】
-1. 所有回答必须优先基于【今日学习材料】，引用材料中的概念、例题、步骤进行讲解
-2. 若问题超出材料范围，先说明「今日材料中未涉及」，再简要补充，并建议回到材料中的相关章节
-3. 结合对话历史理解「这个」「刚才那个」「再解释一下」等指代
-4. 采用引导式教学：先定位到材料中的相关部分，再分步解释，必要时举例
-5. 用清晰、完整的中文回答，可以使用 Markdown 格式（公式用 $...$ 或 $$...$$）`;
+/** 从数据库组装 QA 系统 Prompt（qa:day 模板） */
+export async function buildQASystemPrompt(ctx: DayQAContext): Promise<string> {
+  const assembled = await assemblePrompt(null, "qa", {
+    planGoal: ctx.planGoal,
+    dayNumber: ctx.dayNumber,
+    dayTitle: ctx.dayTitle,
+    dayGoal: ctx.dayGoal || "（见下方学习材料）",
+    typeLabel: TYPE_LABEL_MAP[ctx.learningType] || ctx.learningType,
+    markdownContent: ctx.markdownContent,
+  });
+  if (!assembled) {
+    throw new Error("QA Prompt 未配置：请在 prompt_templates 中配置 purpose=qa 的模板");
+  }
+  return assembled.system;
 }
 
 export async function askAIWithContext(
@@ -392,7 +527,7 @@ export async function askAIWithContext(
 ): Promise<string> {
   try {
     const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-      { role: "system", content: buildQASystemPrompt(dayContext) },
+      { role: "system", content: await buildQASystemPrompt(dayContext) },
       ...history.map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: question },
     ];
@@ -439,7 +574,7 @@ export async function streamQAWithContext(
   signal?: AbortSignal,
 ): Promise<Response> {
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: buildQASystemPrompt(dayContext) },
+    { role: "system", content: await buildQASystemPrompt(dayContext) },
     ...history.map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: question },
   ];
@@ -455,84 +590,50 @@ export async function streamQAWithContext(
   );
 }
 
+export type StreamContentMeta = {
+  dayNumber?: number;
+  phaseOrder?: number;
+  totalDays?: number;
+  phaseName?: string;
+  phaseGoal?: string;
+  signal?: AbortSignal;
+};
+
 export async function streamContent(
   prompt: string,
   learningType: LearningType = "abstract_logic",
   skillLevel: string = "l1",
-  signal?: AbortSignal,
+  meta: StreamContentMeta = {},
 ): Promise<Response> {
-  const systemPrompt = getTypeSystemPrompt(learningType, skillLevel);
+  const dayNumber = meta.dayNumber ?? 1;
+  const assembled = await assemblePrompt(
+    learningType,
+    "content",
+    {
+      skillLevel,
+      dayNumber,
+      phaseOrder: meta.phaseOrder,
+      totalDays: meta.totalDays,
+      phaseName: meta.phaseName,
+      phaseGoal: meta.phaseGoal,
+    },
+    { dayNumber, phaseOrder: meta.phaseOrder },
+  );
+  if (!assembled) {
+    throw new Error(`内容生成 Prompt 未配置：请在 prompt_templates 中配置 content:${learningType} 模板`);
+  }
 
   return chatCompletion(
     {
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: assembled.system },
         { role: "user", content: prompt },
       ],
       stream: true,
-      temperature: 0.7,
-      max_tokens: 8192,
+      temperature: assembled.temperature,
+      max_tokens: assembled.maxTokens,
     },
-    { signal },
+    { signal: meta.signal },
   );
 }
 
-function getDefaultAssessmentQuestions(goal: string): AssessmentQuestion[] {
-  return [
-    {
-      questionIndex: 1,
-      question: `关于「${goal}」的基础认知，以下哪个描述最准确？`,
-      optionsA: "这是一个完全陌生的领域，没有任何实际用途",
-      optionsB: "这是一个需要系统学习和实践的技能领域",
-      optionsC: "这是一个已经过时的技术，不值得学习",
-      optionsD: "这与日常生活毫无关联",
-      correctAnswer: "B",
-      explanation: `${goal} 是一个需要系统学习和实践的技能领域。通过循序渐进的学习和反复练习，可以逐步掌握其核心概念和应用方法。`,
-      difficulty: "basic",
-    },
-    {
-      questionIndex: 2,
-      question: `学习「${goal}」时，最有效的方法是什么？`,
-      optionsA: "只看理论书籍，从不动手实践",
-      optionsB: "理解核心概念并动手实践，反复练习巩固",
-      optionsC: "只看视频教程，不做任何练习",
-      optionsD: "完全依赖他人的指导，不主动思考",
-      correctAnswer: "B",
-      explanation: "理解核心概念并通过实际练习来巩固知识，是学习任何技能最有效的方法。理论和实践相结合才能真正掌握。",
-      difficulty: "basic",
-    },
-    {
-      questionIndex: 3,
-      question: `在「${goal}」的学习过程中，遇到困难时应该怎么做？`,
-      optionsA: "立即放弃，认为这个领域不适合自己",
-      optionsB: "查阅资料、寻求帮助并通过实验验证",
-      optionsC: "跳过困难的部分，假装已经学会了",
-      optionsD: "等待别人主动来教自己",
-      correctAnswer: "B",
-      explanation: "遇到困难时，应该主动查阅资料、向社区寻求帮助，并通过反复实验来验证和加深理解。这是最有效的学习方式。",
-      difficulty: "intermediate",
-    },
-    {
-      questionIndex: 4,
-      question: `关于「${goal}」的进阶应用，以下哪项是正确的？`,
-      optionsA: "只需要掌握基础概念就足够了",
-      optionsB: "需要深入理解原理，并能灵活运用到不同场景中",
-      optionsC: "背诵所有知识点就能成为专家",
-      optionsD: "进阶阶段不需要再学习了",
-      correctAnswer: "B",
-      explanation: "进阶阶段需要深入理解底层原理，并能够灵活地将所学知识应用到各种不同的场景中，而不是仅仅停留在表面记忆。",
-      difficulty: "advanced",
-    },
-    {
-      questionIndex: 5,
-      question: `在「${goal}」的高级阶段，最有价值的提升方向是什么？`,
-      optionsA: "停留在已经掌握的知识上，不再学习新内容",
-      optionsB: "深入理解底层原理，结合实际场景进行创新和优化",
-      optionsC: "只关注理论，完全忽视实践应用",
-      optionsD: "重复做已经会的内容，不再挑战自己",
-      correctAnswer: "B",
-      explanation: "高级阶段应该深入理解底层原理，结合实际业务场景进行创新和优化。真正的掌握体现在能够创造性地解决问题，而不是仅仅重复已有的知识。",
-      difficulty: "expert",
-    },
-  ];
-}

@@ -310,8 +310,7 @@ export default function Settings() {
                   <label className="text-xs mb-1.5 block" style={{ color: 'var(--text-secondary)' }}>昵称</label>
                   <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
                     placeholder="输入你的昵称"
-                    className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#6E56CF] transition-all"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
+                    className="input-field w-full px-4 py-3 rounded-xl text-sm" />
                 </div>
                 <div>
                   <label className="text-xs mb-1.5 block" style={{ color: 'var(--text-secondary)' }}>手机号</label>

@@ -6,13 +6,13 @@ import { useLearningStore } from "@/stores/useLearningStore";
 import { aiService } from "@/services/aiService";
 import { useTtsPlayer } from "@/hooks/useTtsPlayer";
 import { useReadingPrefs } from "@/hooks/useReadingPrefs";
+import { useReadingScrollPersistence } from "@/hooks/useReadingScrollPersistence";
 import TtsButton from "@/components/TtsButton";
 import TodayHeader, { type TodayContentState } from "@/components/today/TodayHeader";
 import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
-import ReadingMarkdown, { getReadingTocItems } from "@/components/reading/ReadingMarkdown";
+import ReadingMarkdown from "@/components/reading/ReadingMarkdown";
 import ReadingShell from "@/components/reading/ReadingShell";
 import ReadingToolbar from "@/components/reading/ReadingToolbar";
-import ReadingToc from "@/components/reading/ReadingToc";
 import MobileSideDrawer from "@/components/ui/MobileSideDrawer";
 import StudyDayOutline, { StudyDayOutlineNav } from "@/components/study/StudyDayOutline";
 import { buildDayContentPrompt } from "@shared/contentPrompt";
@@ -26,29 +26,6 @@ import {
   X,
   Menu,
 } from "lucide-react";
-
-const TOC_SCROLL_OFFSET = 12;
-
-function resolveActiveTocId(
-  scrollRoot: HTMLElement,
-  items: Array<{ id: string }>,
-): string | undefined {
-  const scrollPos = scrollRoot.scrollTop + TOC_SCROLL_OFFSET;
-  let active: string | undefined;
-
-  for (const item of items) {
-    const el = scrollRoot.querySelector<HTMLElement>(`#${CSS.escape(item.id)}`);
-    if (!el) continue;
-    const top =
-      el.getBoundingClientRect().top -
-      scrollRoot.getBoundingClientRect().top +
-      scrollRoot.scrollTop;
-    if (top <= scrollPos) active = item.id;
-    else break;
-  }
-
-  return active;
-}
 
 export default function Study() {
   const store = useLearningStore();
@@ -80,22 +57,11 @@ export default function Study() {
     toggleFocusMode,
   } = useReadingPrefs();
 
-  const [showReadingToc, setShowReadingToc] = useState(false);
-  const [activeTocId, setActiveTocId] = useState<string | undefined>();
   const [showBreakReminder, setShowBreakReminder] = useState(false);
   const [breakDismissed, setBreakDismissed] = useState(false);
   const [isIllustrating, setIsIllustrating] = useState(false);
 
-  const tocItems = useMemo(
-    () => (content ? getReadingTocItems(content) : []),
-    [content],
-  );
-  const activeTocTitle = useMemo(
-    () => tocItems.find((item) => item.id === activeTocId)?.title,
-    [tocItems, activeTocId],
-  );
   const activeDayRef = useRef<HTMLButtonElement>(null);
-  const tocScrollLockRef = useRef<string | null>(null);
 
   const { user } = useAuth();
   const { data: plans, isLoading: plansLoading } = trpc.learning.getPlans.useQuery();
@@ -154,6 +120,23 @@ export default function Study() {
     ? `基于：第 ${store.currentDay} 天 · ${todayItem.title}`
     : "请先完成今日学习内容";
   const qaInputPlaceholder = canAskQA ? "输入问题..." : "请先生成今日学习内容";
+
+  const contentVersion = useMemo(() => {
+    if (existingContent?.generatedAt) {
+      return new Date(existingContent.generatedAt).toISOString();
+    }
+    return `draft:${content.length}`;
+  }, [existingContent?.generatedAt, content.length]);
+
+  const { clearSaved: clearReadingScroll } = useReadingScrollPersistence({
+    scrollRef: contentScrollRef,
+    planId: store.currentPlanId,
+    dayNumber: store.currentDay,
+    userId: user?.id,
+    content,
+    contentVersion,
+    enabled: !!content?.trim() && !isStreaming && !isLoading,
+  });
 
   const todayContentState: TodayContentState = isStreaming
     ? "streaming"
@@ -300,6 +283,12 @@ export default function Study() {
         store.setContentLoading(false); store.setStreaming(false);
         setError(`生成失败: ${err}`);
       },
+    }, {
+      dayNumber: store.currentDay,
+      phaseOrder: todayItem.phaseOrder ?? undefined,
+      totalDays: store.totalDays,
+      phaseName: todayItem.phaseName ?? undefined,
+      phaseGoal: todayItem.goal || undefined,
     });
   };
 
@@ -388,14 +377,6 @@ export default function Study() {
 
   useEffect(() => { qaEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [qaMessages, isAiTyping]);
 
-  const updateActiveTocFromScroll = useCallback(() => {
-    const scrollRoot = contentScrollRef.current;
-    if (!scrollRoot || tocItems.length === 0) return;
-    if (tocScrollLockRef.current) return;
-    const next = resolveActiveTocId(scrollRoot, tocItems);
-    setActiveTocId((prev) => (prev === next ? prev : next));
-  }, [tocItems]);
-
   const handleContentScroll = useCallback(() => {
     if (scrollRafRef.current !== null) return;
 
@@ -409,25 +390,8 @@ export default function Study() {
       if (progressBarRef.current) {
         progressBarRef.current.style.width = `${pct}%`;
       }
-      updateActiveTocFromScroll();
     });
-  }, [updateActiveTocFromScroll]);
-
-  useEffect(() => {
-    const scrollRoot = contentScrollRef.current;
-    if (!scrollRoot || tocItems.length === 0) {
-      setActiveTocId(undefined);
-      return;
-    }
-
-    const raf = requestAnimationFrame(() => {
-      if (tocScrollLockRef.current) return;
-      const next = resolveActiveTocId(scrollRoot, tocItems);
-      setActiveTocId(next);
-    });
-
-    return () => cancelAnimationFrame(raf);
-  }, [tocItems, content]);
+  }, []);
 
   useEffect(() => {
     const el = contentScrollRef.current;
@@ -442,51 +406,8 @@ export default function Study() {
     setShowBreakReminder(false);
   }, []);
 
-  const scrollToSection = useCallback((id: string) => {
-    tocScrollLockRef.current = id;
-    setShowReadingToc(false);
-    setActiveTocId(id);
-    requestAnimationFrame(() => {
-      const scrollRoot = contentScrollRef.current;
-      if (!scrollRoot) {
-        tocScrollLockRef.current = null;
-        return;
-      }
-      const section = scrollRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-      if (!section) {
-        tocScrollLockRef.current = null;
-        return;
-      }
-      const top =
-        section.getBoundingClientRect().top -
-        scrollRoot.getBoundingClientRect().top +
-        scrollRoot.scrollTop -
-        TOC_SCROLL_OFFSET;
-      scrollRoot.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-
-      let unlocked = false;
-      const unlock = () => {
-        if (unlocked) return;
-        unlocked = true;
-        scrollRoot.removeEventListener("scrollend", unlock);
-        window.clearTimeout(fallbackTimer);
-        tocScrollLockRef.current = null;
-        updateActiveTocFromScroll();
-      };
-
-      scrollRoot.addEventListener("scrollend", unlock, { once: true });
-      const fallbackTimer = window.setTimeout(unlock, 800);
-    });
-  }, [updateActiveTocFromScroll]);
-
   const openOutline = useCallback(() => {
-    setShowReadingToc(false);
     setShowOutline(true);
-  }, []);
-
-  const openReadingToc = useCallback(() => {
-    setShowOutline(false);
-    setShowReadingToc(true);
   }, []);
 
   useEffect(() => {
@@ -669,7 +590,7 @@ export default function Study() {
         <div className="flex-1 overflow-hidden flex min-h-0">
           <div
             ref={contentScrollRef}
-            className={`study-content-scroll flex-1 min-h-0 overflow-y-auto p-0 md:p-6 ${showQA ? "" : "w-full"}`}
+            className={`study-content-scroll flex-1 min-h-0 overflow-y-auto ${showQA ? "study-content-scroll--qa-open" : ""}`}
           >
             {!content && !isLoading ? (
               <div className="h-full flex flex-col items-center justify-center px-4">
@@ -690,7 +611,7 @@ export default function Study() {
                 </div>
               </div>
             ) : (
-              <div className="reading-layout">
+              <div className="reading-article">
                 {isLoading && !content ? (
                   <div className="flex flex-col items-center justify-center py-20 w-full">
                     <Loader2 size={28} className="text-token-brand animate-spin mb-3" />
@@ -717,8 +638,6 @@ export default function Study() {
                         onIncreaseFont={increaseFontSize}
                         onToggleLineHeight={toggleLineHeight}
                         onToggleFocus={toggleFocusMode}
-                        onOpenToc={openReadingToc}
-                        showTocButton={tocItems.length > 0}
                       />
                       <ReadingMarkdown
                         content={content}
@@ -733,27 +652,21 @@ export default function Study() {
                         </div>
                       )}
                       {content && !isStreaming && (
-                        <div className="mt-4 pt-3 border-t border-[var(--reading-card-border)]">
+                        <div className="reading-footer">
                           <button
                             type="button"
-                            onClick={() => { setContent(""); handleGenerateContent(); }}
-                            className="type-caption text-[var(--reading-text-muted)] hover:text-token-brand transition-colors"
+                            onClick={() => {
+                              clearReadingScroll();
+                              setContent("");
+                              handleGenerateContent();
+                            }}
+                            className="reading-footer__btn"
                           >
                             重新生成内容
                           </button>
                         </div>
                       )}
                     </ReadingShell>
-
-                    <ReadingToc
-                      items={tocItems}
-                      activeId={activeTocId}
-                      activeTitle={activeTocTitle}
-                      onNavigate={scrollToSection}
-                      mobileOpen={showReadingToc}
-                      onMobileClose={() => setShowReadingToc(false)}
-                      readingMode={readingPrefs.mode}
-                    />
                   </>
                 )}
               </div>

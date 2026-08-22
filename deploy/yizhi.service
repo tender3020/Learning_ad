@@ -1,0 +1,29 @@
+[Unit]
+Description=Yizhi (弈智) Node app
+Documentation=https://github.com/
+After=network.target mysql.service mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yizhi
+Group=yizhi
+WorkingDirectory=/opt/yizhi/app
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# 将密钥放在 EnvironmentFile，勿把 .env 提交进仓库
+EnvironmentFile=-/opt/yizhi/app/.env
+ExecStart=/usr/bin/node dist/boot.js
+Restart=always
+RestartSec=5
+# 日志走 journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=yizhi
+
+# 安全加固（按需调整）
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
