@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 系统栏区域背景色（浅色模式，与网页浅色主题背景一致） -->
+    <color name="status_bar_bg">#F4F3F7</color>
+</resources>

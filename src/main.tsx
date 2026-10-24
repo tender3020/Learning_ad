@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import './index.css'
 import { TRPCProvider } from "@/providers/trpc"
+import { syncNativeStatusBarStyle } from "@/lib/nativeStatusBar"
 import App from './App.tsx'
 
 // 在渲染前应用主题设置
@@ -16,6 +17,7 @@ function applyTheme() {
       } else {
         document.documentElement.classList.remove("theme-light");
       }
+      syncNativeStatusBarStyle(settings.theme === "light" ? "light" : "dark");
     }
   } catch {
     // ignore

@@ -101,7 +101,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
       <div className="md:hidden flex flex-col h-full w-full">
         <div
-          className="h-10 backdrop-blur-xl border-b border-token-surface z-30 flex items-center justify-between px-3 flex-shrink-0"
+          className="min-h-10 safe-area-pt backdrop-blur-xl border-b border-token-surface z-30 flex items-center justify-between px-3 flex-shrink-0"
           style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 80%, transparent)" }}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -126,7 +126,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </main>
 
         <nav
-          className="h-12 backdrop-blur-xl border-t border-token-surface z-30 flex items-center justify-around flex-shrink-0 safe-area-pb"
+          className="min-h-12 backdrop-blur-xl border-t border-token-surface z-30 flex items-center justify-around flex-shrink-0 safe-area-pb"
           style={{ backgroundColor: "color-mix(in srgb, var(--bg-secondary) 90%, transparent)" }}
         >
           {navItems.map((item) => {

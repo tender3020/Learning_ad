@@ -34,6 +34,8 @@ const config = {
   },
   android: {
     allowMixedContent: true,
+    // 沉浸式：网页背景延伸到系统栏之下，配合网页端 safe-area 适配与状态栏样式同步
+    adjustMarginsForEdgeToEdge: "disable",
   },
 };
 

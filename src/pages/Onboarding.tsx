@@ -336,7 +336,7 @@ export default function Onboarding() {
   // RENDER
   // ===================================================================
   return (
-    <div className="h-full flex flex-col items-center justify-center overflow-hidden relative" style={{ backgroundColor: "var(--bg-primary)" }}>
+    <div className="h-full flex flex-col items-center justify-center overflow-hidden relative safe-area-pt" style={{ backgroundColor: "var(--bg-primary)" }}>
       <WireframeSphere opacity={0.15} />
       <AnimatePresence mode="wait">
 

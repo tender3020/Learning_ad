@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
+import { syncNativeStatusBarStyle } from "@/lib/nativeStatusBar";
 import WireframeSphere from "@/components/3d/WireframeSphere";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -55,6 +56,7 @@ function applyThemeToDocument(theme: "dark" | "light") {
   } else {
     document.documentElement.classList.remove("theme-light");
   }
+  syncNativeStatusBarStyle(theme);
 }
 
 // 请求浏览器通知权限

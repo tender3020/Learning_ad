@@ -3,11 +3,12 @@
   "appName": "弈智",
   "webDir": "mobile/shell",
   "server": {
-    "url": "http://YOUR_SERVER_IP",
+    "url": "http://120.24.228.192",
     "cleartext": true,
     "androidScheme": "http"
   },
   "android": {
-    "allowMixedContent": true
+    "allowMixedContent": true,
+    "adjustMarginsForEdgeToEdge": "disable"
   }
 }
