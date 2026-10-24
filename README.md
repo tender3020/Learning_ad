@@ -260,6 +260,16 @@ ps aux | grep -E 'node dist/boot|vite'
 
 若当前误用 dev 模式对外，改为 `npm run build && npm start` 后重启服务即可消除此类 overlay。
 
+### Android App（Capacitor 套壳）
+
+将现有网站打包为安卓 APK（WebView 打开你的服务器 IP/域名）。详见 [`mobile/README.md`](mobile/README.md)。
+
+```bash
+cp .env.capacitor.example .env.capacitor   # 填写 CAPACITOR_SERVER_URL
+npm run cap:sync
+npm run cap:open                           # Android Studio 打包 APK
+```
+
 ### 代码检查
 
 ```bash

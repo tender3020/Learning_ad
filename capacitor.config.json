@@ -1,0 +1,13 @@
+{
+  "appId": "com.yizhi.learning",
+  "appName": "弈智",
+  "webDir": "mobile/shell",
+  "server": {
+    "url": "http://YOUR_SERVER_IP",
+    "cleartext": true,
+    "androidScheme": "http"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

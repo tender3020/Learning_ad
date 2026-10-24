@@ -26,6 +26,7 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.capacitor
 # Database
 *.db
 *.sqlite
@@ -41,4 +42,8 @@ data/uploads/content-images/
 # Test coverage
 coverage/
 .nyc_output/
-@Cys30209*
+# Android build outputs
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties

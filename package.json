@@ -14,9 +14,16 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "cap:sync": "node scripts/prepare-capacitor.mjs && npx cap sync android",
+    "cap:open": "npx cap open android",
+    "cap:run": "npx cap run android"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.2",
+    "@capacitor/app": "^7.0.2",
+    "@capacitor/core": "^7.4.2",
+    "@capacitor/splash-screen": "^7.0.2",
     "@gsap/react": "^2.1.2",
     "@hono/node-server": "^1.14.3",
     "@hookform/resolvers": "^5.2.2",
@@ -98,6 +105,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "@capacitor/cli": "^7.4.2",
     "autoprefixer": "^10.4.23",
     "drizzle-kit": "^0.31.8",
     "esbuild": "^0.27.2",

@@ -7,6 +7,7 @@ import { aiService } from "@/services/aiService";
 import { TYPE_LABELS, type LearningType } from "@shared/typeEngine";
 import type { OutlineItem } from "@shared/outlineTypes";
 import WireframeSphere from "@/components/3d/WireframeSphere";
+import MathText from "@/components/markdown/MathText";
 import {
   Sparkles,
   ArrowRight,
@@ -490,7 +491,7 @@ export default function Onboarding() {
             </div>
 
             {/* 题目 */}
-            <h2 className="text-base md:text-lg font-medium text-token-primary mb-5 leading-relaxed">{currentQ.question}</h2>
+            <h2 className="text-base md:text-lg font-medium text-token-primary mb-5 leading-relaxed"><MathText text={currentQ.question} /></h2>
 
             {/* 选项 */}
             <div className="space-y-2.5 mb-5">
@@ -514,7 +515,7 @@ export default function Onboarding() {
                     }`}>
                       {showCorrect ? <CheckCircle2 size={16} /> : isWrong ? <XCircle size={16} /> : opt}
                     </div>
-                    <span className="text-sm text-token-primary flex-1">{optionText}</span>
+                    <MathText text={optionText} className="text-sm text-token-primary flex-1" />
                   </button>
                 );
               })}
@@ -536,7 +537,7 @@ export default function Onboarding() {
                       )}
                     </p>
                     {currentQ.explanation && (
-                      <p className="text-xs text-token-secondary leading-relaxed mt-2">{currentQ.explanation}</p>
+                      <MathText as="p" text={currentQ.explanation} className="text-xs text-token-secondary leading-relaxed mt-2" />
                     )}
                   </div>
                 </motion.div>

@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/providers/trpc";
 import { useLearningStore } from "@/stores/useLearningStore";
+import MathText from "@/components/markdown/MathText";
 import {
   CheckCircle2,
   XCircle,
@@ -215,9 +216,12 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
 
       {/* 题目 */}
       <div className="px-4 py-3 md:px-5 md:py-4">
-        <p className="text-sm md:text-base font-medium leading-relaxed" style={{ color: "var(--text-primary)" }}>
-          {quiz.question}
-        </p>
+        <MathText
+          as="p"
+          text={quiz.question}
+          className="text-sm md:text-base font-medium leading-relaxed"
+          style={{ color: "var(--text-primary)" }}
+        />
       </div>
 
       {/* 选项 */}
@@ -248,9 +252,11 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
                 key
               )}
             </div>
-            <span className="text-xs md:text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
-              {quiz.options[key]}
-            </span>
+            <MathText
+              text={quiz.options[key]}
+              className="text-xs md:text-sm leading-relaxed"
+              style={{ color: "var(--text-primary)" }}
+            />
           </button>
         ))}
       </div>
@@ -301,9 +307,12 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
                     <Lightbulb size={14} className="text-[#FF9500]" />
                     <span className="text-xs font-medium text-[#FF9500]">答案解析</span>
                   </div>
-                  <p className="text-xs md:text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                    {quiz.explanation}
-                  </p>
+                  <MathText
+                    as="p"
+                    text={quiz.explanation}
+                    className="text-xs md:text-sm leading-relaxed"
+                    style={{ color: "var(--text-secondary)" }}
+                  />
                 </div>
               </motion.div>
             )}

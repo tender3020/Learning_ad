@@ -9,6 +9,7 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { splitContentWithQuizzes, QuizCard } from "@/components/quiz/QuizRenderer";
 import MermaidDiagram from "./MermaidDiagram";
+import { preprocessMath } from "./mathPreprocess";
 import { stripIllustrationMarkers } from "@shared/illustrationMarkers";
 
 export type MarkdownVariant = "default" | "reading";
@@ -89,23 +90,6 @@ interface MarkdownRendererProps {
   onQuizSubmitted?: () => void;
   variant?: MarkdownVariant;
   deferMermaidRender?: boolean;
-}
-
-/**
- * 预处理 LaTeX 公式格式
- * AI 可能输出各种非标准格式，统一转换为 remark-math 支持的标准格式
- */
-function preprocessMath(content: string): string {
-  return (
-    content
-      .replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, "$$$$$1$$$$")
-      .replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, "$$$1$$")
-      .replace(
-        /^\[\s*\n?\s*(\\[a-zA-Z]+.*?)\s*\n?\s*\]$/gm,
-        "$$$$$1$$$$"
-      )
-      .replace(/^\[\s*(\\.+?)\s*\]$/gm, "$$$$$1$$$$")
-  );
 }
 
 function preprocessContent(content: string): string {
