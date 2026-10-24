@@ -32,10 +32,10 @@ export default function TtsButton({
       title={isPlaying ? "停止朗读" : "语音朗读"}
       className={`inline-flex items-center gap-1.5 rounded-xl transition-colors disabled:opacity-40 ${
         isPlaying
-          ? "bg-[rgba(110,86,207,0.2)] text-[#A78BFA] border border-[rgba(110,86,207,0.3)]"
+          ? "bg-[rgba(var(--brand-rgb),0.2)] text-[var(--brand-secondary)] border border-[rgba(var(--brand-rgb),0.3)]"
           : isLoading
-            ? "liquid-glass text-[#A78BFA]"
-            : "liquid-glass text-[#8A8A8E] hover:text-[#F5F5F7]"
+            ? "liquid-glass text-[var(--brand-secondary)]"
+            : "liquid-glass text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
       } ${size === "md" ? "px-3 py-1.5 text-xs" : "px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium"} ${className}`}
     >
       {isLoading ? (

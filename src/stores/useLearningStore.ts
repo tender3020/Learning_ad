@@ -198,7 +198,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       goal: plan.goal,
       subject: plan.subject || plan.goal,
       totalDays: plan.totalDays,
-      currentDay: plan.currentDay,
+      currentDay: isSamePlan ? Math.max(s.currentDay, plan.currentDay) : plan.currentDay,
       outline: isSamePlan ? s.outline : [], // 同计划保留大纲，切换计划才清空
     });
     persist(userId, state);

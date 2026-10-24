@@ -188,7 +188,7 @@ function getMarkdownComponents(
           style={
             isReading
               ? { background: "var(--code-bg)", color: "var(--code-color)" }
-              : { background: "rgba(110, 86, 207, 0.15)", color: "#A78BFA" }
+              : { background: "rgba(var(--brand-rgb), 0.15)", color: "var(--brand-secondary)" }
           }
           {...props}
         >
@@ -263,7 +263,7 @@ function getMarkdownComponents(
         className={
           isReading
             ? "reading-blockquote"
-            : "border-l-[3px] border-[#6E56CF] pl-4 my-4 italic"
+            : "border-l-[3px] border-[var(--brand-primary)] pl-4 my-4 italic"
         }
         style={{ color: isReading ? "var(--reading-text-body, var(--text-tertiary))" : "var(--reading-text-muted, var(--text-secondary))" }}
       >

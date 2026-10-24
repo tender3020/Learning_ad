@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type ReadingMode = "app" | "soft-dark" | "warm";
-export type ReadingFontSize = "sm" | "md" | "lg";
-export type ReadingLineHeight = "normal" | "relaxed";
+export type ReadingFontSize = "xs" | "sm" | "md" | "lg" | "xl";
+export type ReadingLineHeight = "tight" | "normal" | "relaxed";
+export type ReadingFontFamily = "system" | "song" | "hei" | "kai" | "yuan";
 
 export type ReadingPrefs = {
   mode: ReadingMode;
   fontSize: ReadingFontSize;
   lineHeight: ReadingLineHeight;
+  fontFamily: ReadingFontFamily;
   focusMode: boolean;
 };
 
@@ -17,7 +19,30 @@ const DEFAULT_PREFS: ReadingPrefs = {
   mode: "soft-dark",
   fontSize: "md",
   lineHeight: "relaxed",
+  fontFamily: "system",
   focusMode: true,
+};
+
+export const FONT_SIZES: ReadingFontSize[] = ["xs", "sm", "md", "lg", "xl"];
+
+export const READING_MODE_LABELS: Record<ReadingMode, string> = {
+  app: "跟随应用",
+  "soft-dark": "柔和深色",
+  warm: "暖色护眼",
+};
+
+export const READING_FONT_LABELS: Record<ReadingFontFamily, string> = {
+  system: "系统",
+  song: "宋体",
+  hei: "黑体",
+  kai: "楷体",
+  yuan: "圆体",
+};
+
+export const READING_LEADING_LABELS: Record<ReadingLineHeight, string> = {
+  tight: "紧凑",
+  normal: "标准",
+  relaxed: "宽松",
 };
 
 function loadPrefs(): ReadingPrefs {
@@ -25,10 +50,21 @@ function loadPrefs(): ReadingPrefs {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_PREFS;
     const parsed = JSON.parse(raw) as Partial<ReadingPrefs>;
+    const fontSize = FONT_SIZES.includes(parsed.fontSize as ReadingFontSize)
+      ? (parsed.fontSize as ReadingFontSize)
+      : DEFAULT_PREFS.fontSize;
+    const lineHeight =
+      parsed.lineHeight === "tight" || parsed.lineHeight === "normal" || parsed.lineHeight === "relaxed"
+        ? parsed.lineHeight
+        : DEFAULT_PREFS.lineHeight;
+    const fontFamily = parsed.fontFamily && parsed.fontFamily in READING_FONT_LABELS
+      ? parsed.fontFamily
+      : DEFAULT_PREFS.fontFamily;
     return {
       mode: parsed.mode ?? DEFAULT_PREFS.mode,
-      fontSize: parsed.fontSize ?? DEFAULT_PREFS.fontSize,
-      lineHeight: parsed.lineHeight ?? DEFAULT_PREFS.lineHeight,
+      fontSize,
+      lineHeight,
+      fontFamily,
       focusMode: parsed.focusMode ?? DEFAULT_PREFS.focusMode,
     };
   } catch {
@@ -39,10 +75,6 @@ function loadPrefs(): ReadingPrefs {
 function savePrefs(prefs: ReadingPrefs) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 }
-
-const MODE_CYCLE: ReadingMode[] = ["app", "soft-dark", "warm"];
-
-const FONT_SIZES: ReadingFontSize[] = ["sm", "md", "lg"];
 
 export function useReadingPrefs() {
   const [prefs, setPrefsState] = useState<ReadingPrefs>(loadPrefs);
@@ -55,54 +87,5 @@ export function useReadingPrefs() {
     setPrefsState((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  const cycleMode = useCallback(() => {
-    setPrefsState((prev) => {
-      const idx = MODE_CYCLE.indexOf(prev.mode);
-      const next = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
-      return { ...prev, mode: next };
-    });
-  }, []);
-
-  const increaseFontSize = useCallback(() => {
-    setPrefsState((prev) => {
-      const idx = FONT_SIZES.indexOf(prev.fontSize);
-      if (idx >= FONT_SIZES.length - 1) return prev;
-      return { ...prev, fontSize: FONT_SIZES[idx + 1] };
-    });
-  }, []);
-
-  const decreaseFontSize = useCallback(() => {
-    setPrefsState((prev) => {
-      const idx = FONT_SIZES.indexOf(prev.fontSize);
-      if (idx <= 0) return prev;
-      return { ...prev, fontSize: FONT_SIZES[idx - 1] };
-    });
-  }, []);
-
-  const toggleLineHeight = useCallback(() => {
-    setPrefsState((prev) => ({
-      ...prev,
-      lineHeight: prev.lineHeight === "normal" ? "relaxed" : "normal",
-    }));
-  }, []);
-
-  const toggleFocusMode = useCallback(() => {
-    setPrefsState((prev) => ({ ...prev, focusMode: !prev.focusMode }));
-  }, []);
-
-  return {
-    prefs,
-    setPrefs,
-    cycleMode,
-    increaseFontSize,
-    decreaseFontSize,
-    toggleLineHeight,
-    toggleFocusMode,
-  };
+  return { prefs, setPrefs };
 }
-
-export const READING_MODE_LABELS: Record<ReadingMode, string> = {
-  app: "跟随应用",
-  "soft-dark": "柔和深色",
-  warm: "暖色护眼",
-};

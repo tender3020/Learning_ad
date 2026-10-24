@@ -108,7 +108,7 @@ export default function TodayHeader({
                 type="button"
                 onClick={onGenerate}
                 disabled={isGenerating}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-xl type-body font-medium text-white bg-token-brand hover:opacity-90 transition-opacity disabled:opacity-50 brand-glow"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-xl type-body font-medium text-[var(--brand-foreground)] bg-token-brand hover:opacity-90 transition-opacity disabled:opacity-50 brand-glow"
               >
                 {isGenerating ? (
                   <Loader2 size={14} className="animate-spin" />

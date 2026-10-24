@@ -46,13 +46,13 @@ const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   basic: "基础", intermediate: "进阶", advanced: "高级", expert: "专家",
 };
 const DIFFICULTY_COLORS: Record<Difficulty, string> = {
-  basic: "#34C759", intermediate: "#0A84FF", advanced: "#FF9500", expert: "#FF3B30",
+  basic: "var(--color-success)", intermediate: "var(--color-info)", advanced: "var(--color-warning)", expert: "var(--color-danger)",
 };
 const LEVEL_NAMES: Record<string, string> = {
   l1: "零基础", l2: "入门", l3: "中级", l4: "进阶", l5: "高级",
 };
 const LEVEL_COLORS: Record<string, string> = {
-  l1: "#FF3B30", l2: "#FF9500", l3: "#0A84FF", l4: "#A78BFA", l5: "#34C759",
+  l1: "var(--color-danger)", l2: "var(--color-warning)", l3: "var(--color-info)", l4: "var(--brand-secondary)", l5: "var(--color-success)",
 };
 
 const suggestedGoals = [
@@ -379,7 +379,7 @@ export default function Onboarding() {
           <motion.div key="input" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }}
             className="relative z-10 w-full max-w-lg px-4 md:px-6">
             {quizError && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-3 p-3 rounded-xl bg-[rgba(255,59,48,0.08)] border border-[rgba(255,59,48,0.15)] text-xs text-[#FF3B30] text-center">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-3 p-3 rounded-xl bg-[rgba(255,59,48,0.08)] border border-[rgba(255,59,48,0.15)] text-xs text-[var(--color-danger)] text-center">
                 {quizError}
               </motion.div>
             )}
@@ -460,10 +460,10 @@ export default function Onboarding() {
               {/* 错误提示 - 计划生成失败时显示 */}
               {planError && (
                 <div className="mb-4 p-4 rounded-xl bg-[rgba(255,59,48,0.1)] border border-[rgba(255,59,48,0.2)]">
-                  <p className="text-sm text-[#FF3B30] font-medium mb-1">计划生成遇到问题</p>
-                  <p className="text-xs text-[#FF3B30] opacity-80 mb-3">{planError}</p>
+                  <p className="text-sm text-[var(--color-danger)] font-medium mb-1">计划生成遇到问题</p>
+                  <p className="text-xs text-[var(--color-danger)] opacity-80 mb-3">{planError}</p>
                   <button onClick={() => { setPlanError(""); generatePlan(skillLevel); }}
-                    className="px-4 py-2 bg-[#FF3B30] hover:bg-[#E6352B] text-white rounded-lg text-xs font-medium transition-colors">
+                    className="px-4 py-2 bg-[var(--color-danger)] hover:bg-[var(--color-danger)] text-white rounded-lg text-xs font-medium transition-colors">
                     重新生成
                   </button>
                 </div>
@@ -510,8 +510,8 @@ export default function Onboarding() {
                       isSelected ? "quiz-option--selected" : ""
                     }`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-semibold ${
-                      showCorrect ? "bg-[#34C759] text-white" : isWrong ? "bg-[#FF3B30] text-white" :
-                      isSelected ? "bg-[#6E56CF] text-white" : "quiz-option-letter"
+                      showCorrect ? "bg-[var(--color-success)] text-white" : isWrong ? "bg-[var(--color-danger)] text-white" :
+                      isSelected ? "bg-[var(--brand-primary)] text-[var(--brand-foreground)]" : "quiz-option-letter"
                     }`}>
                       {showCorrect ? <CheckCircle2 size={16} /> : isWrong ? <XCircle size={16} /> : opt}
                     </div>
@@ -527,13 +527,13 @@ export default function Onboarding() {
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mb-5">
                   <div className="p-4 rounded-xl surface-panel">
                     <div className="flex items-center gap-2 mb-2">
-                      <Lightbulb size={14} className="text-[#FF9500]" />
-                      <span className="text-xs font-medium text-[#FF9500]">答案解析</span>
+                      <Lightbulb size={14} className="text-[var(--color-warning)]" />
+                      <span className="text-xs font-medium text-[var(--color-warning)]">答案解析</span>
                     </div>
                     <p className="text-xs text-token-secondary leading-relaxed">
-                      正确答案：<span className="text-[#34C759] font-medium">{currentQ.correctAnswer}</span>
+                      正确答案：<span className="text-[var(--color-success)] font-medium">{currentQ.correctAnswer}</span>
                       {currentQ.userAnswer && currentQ.userAnswer !== currentQ.correctAnswer && (
-                        <span className="text-[#FF3B30]"> · 你的答案：{currentQ.userAnswer}</span>
+                        <span className="text-[var(--color-danger)]"> · 你的答案：{currentQ.userAnswer}</span>
                       )}
                     </p>
                     {currentQ.explanation && (
@@ -576,7 +576,7 @@ export default function Onboarding() {
                     <motion.div key={i} initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1, rotateY: [angle, angle + 360] }}
                       transition={{ opacity: { delay: i * 0.05, duration: 0.3 }, scale: { delay: i * 0.05, duration: 0.3 }, rotateY: { delay: i * 0.05, duration: 5, repeat: Infinity, ease: "linear" } }}
                       className="absolute" style={{ transform: `rotateY(${angle}deg) translateZ(${typeof window !== 'undefined' && window.innerWidth < 768 ? '80px' : '120px'})`, transformStyle: "preserve-3d" }}>
-                      <div className="w-8 h-10 md:w-12 md:h-16 bg-[rgba(255,255,255,0.9)] rounded-md md:rounded-lg flex items-center justify-center shadow-lg shadow-[rgba(110,86,207,0.3)]">
+                      <div className="w-8 h-10 md:w-12 md:h-16 bg-[rgba(255,255,255,0.9)] rounded-md md:rounded-lg flex items-center justify-center shadow-lg shadow-[rgba(var(--brand-rgb),0.3)]">
                         <span className="type-caption md:text-sm font-bold text-[#0A0A0A]">D{i + 1}</span>
                       </div>
                     </motion.div>
@@ -584,7 +584,7 @@ export default function Onboarding() {
                 })}
               </div>
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-[#6E56CF] opacity-20 blur-xl" />
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-[var(--brand-primary)] opacity-20 blur-xl" />
               </div>
             </div>
             <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -595,7 +595,7 @@ export default function Onboarding() {
               className="text-sm text-token-secondary mb-4 md:mb-6">AI 正在根据你的水平生成个性化课程...</motion.p>
             <div className="w-56 md:w-72 mx-auto">
               <div className="h-1.5 progress-track rounded-full overflow-hidden">
-                <motion.div className="h-full bg-gradient-to-r from-[#6E56CF] to-[#A78BFA] rounded-full"
+                <motion.div className="h-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-full"
                   initial={{ width: "0%" }} animate={{ width: `${store.generationProgress}%` }} transition={{ duration: 0.5 }} />
               </div>
               <p className="type-caption md:text-xs text-token-secondary mt-2">{store.generationStage}</p>
@@ -612,7 +612,7 @@ export default function Onboarding() {
               <p className="text-sm text-token-secondary">按阶段循序渐进，确认后开始学习</p>
             </div>
             {planError && (
-              <div className="mb-3 p-3 rounded-xl bg-[rgba(255,59,48,0.1)] border border-[rgba(255,59,48,0.2)] text-xs text-[#FF3B30]">
+              <div className="mb-3 p-3 rounded-xl bg-[rgba(255,59,48,0.1)] border border-[rgba(255,59,48,0.2)] text-xs text-[var(--color-danger)]">
                 {planError}
               </div>
             )}
@@ -690,13 +690,13 @@ export default function Onboarding() {
             className="relative z-10 text-center px-4 max-w-md">
             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}
               className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 md:mb-6 rounded-full bg-[rgba(255,149,0,0.1)] border border-[rgba(255,149,0,0.2)] flex items-center justify-center">
-              <AlertCircle size={32} className="text-[#FF9500]" />
+              <AlertCircle size={32} className="text-[var(--color-warning)]" />
             </motion.div>
             <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
               className="text-xl md:text-2xl font-semibold text-token-primary mb-2 md:mb-3">计划数量已达上限</motion.h2>
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
               className="text-sm text-token-secondary mb-6">
-              你已有 <span className="text-[#FF9500] font-medium">{activePlanCount}</span> 个进行中的学习计划，系统限制最多同时管理 7 个。
+              你已有 <span className="text-[var(--color-warning)] font-medium">{activePlanCount}</span> 个进行中的学习计划，系统限制最多同时管理 7 个。
               请先完成部分现有计划，或删除不需要的计划后再添加新的学习内容。
             </motion.p>
             <div className="flex flex-col sm:flex-row gap-3">

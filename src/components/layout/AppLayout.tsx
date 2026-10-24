@@ -1,12 +1,17 @@
-import { Link, useLocation, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { motion, AnimatePresence } from "framer-motion";
+import MobileMenuDrawer from "@/components/layout/MobileMenuDrawer";
+import Progress from "@/pages/Progress";
 import {
   LayoutDashboard,
   BarChart3,
   Settings,
   LogOut,
   Sun,
+  Menu,
+  X,
 } from "lucide-react";
 
 const navItems = [
@@ -28,12 +33,27 @@ function isNavActive(pathname: string, itemPath: string) {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
 
-  const displayName = user?.name || (user?.phone ? `用户${user.phone.slice(-4)}` : "学习者");
-  const isToday = isNavActive(location.pathname, "/today");
-  const currentNav = navItems.find((n) => isNavActive(location.pathname, n.path));
+  // 移动端全屏视图：none=路由页面, menu=左侧菜单, progress=右侧进度
+  const [mobileView, setMobileView] = useState<"none" | "menu" | "progress">("none");
+
+  // 路由变化时关闭全屏视图
+  useEffect(() => {
+    setMobileView("none");
+  }, [location.pathname]);
+
+  // 全屏视图打开时锁定背景滚动
+  useEffect(() => {
+    if (mobileView === "none") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileView]);
+
+
 
   return (
     <div className="h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--bg-primary)" }}>
@@ -100,58 +120,60 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </div>
 
       <div className="md:hidden flex flex-col h-full w-full">
+        {/* 顶栏：左三条杠菜单，右进度 */}
         <div
-          className="min-h-10 safe-area-pt backdrop-blur-xl border-b border-token-surface z-30 flex items-center justify-between px-3 flex-shrink-0"
+          className="app-mobile-topbar min-h-10 safe-area-pt backdrop-blur-xl border-b border-token-surface z-30 flex items-center justify-between px-2 flex-shrink-0"
           style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 80%, transparent)" }}
         >
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <img src="/logo.png" alt="弈智" className="w-5 h-5 rounded flex-shrink-0" />
-            <span className="text-sm font-semibold text-token-primary truncate">
-              {isToday ? "弈智" : currentNav?.label || "弈智"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={() => navigate("/settings")}
-              className="w-5 h-5 rounded-full flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, var(--brand-primary), var(--brand-secondary))" }}
-            >
-              <span className="type-caption font-semibold text-white">{(displayName[0] || "U").toUpperCase()}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMobileView(mobileView === "menu" ? "none" : "menu")}
+            aria-label={mobileView === "menu" ? "关闭菜单" : "打开菜单"}
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-token-primary"
+          >
+            {mobileView === "menu" ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileView(mobileView === "progress" ? "none" : "progress")}
+            aria-label="学习进度"
+            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+              mobileView === "progress" ? "text-token-brand-light" : "text-token-primary"
+            }`}
+          >
+            <BarChart3 size={20} />
+          </button>
         </div>
 
         <main className="flex-1 overflow-y-auto min-w-0" style={{ WebkitOverflowScrolling: "touch" }}>
           {children}
         </main>
 
-        <nav
-          className="min-h-12 backdrop-blur-xl border-t border-token-surface z-30 flex items-center justify-around flex-shrink-0 safe-area-pb"
-          style={{ backgroundColor: "color-mix(in srgb, var(--bg-secondary) 90%, transparent)" }}
-        >
-          {navItems.map((item) => {
-            const isActive = isNavActive(location.pathname, item.path);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex flex-col items-center justify-center gap-0 w-14 h-full rounded-lg transition-all relative ${
-                  isActive ? "text-token-brand-light" : "text-token-secondary"
-                }`}
-              >
-                <Icon size={17} strokeWidth={isActive ? 2.5 : 1.5} />
-                <span className="type-caption font-medium">{item.label}</span>
-                {isActive && (
-                  <div
-                    className="absolute -top-px left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full"
-                    style={{ backgroundColor: "var(--brand-primary)" }}
-                  />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* 左侧菜单全屏视图（含用户信息 + 计划列表） */}
+        <MobileMenuDrawer open={mobileView === "menu"} onClose={() => setMobileView("none")} />
+
+        {/* 进度全屏视图（右侧滑入） */}
+        <AnimatePresence>
+          {mobileView === "progress" && (
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed inset-0 z-20 md:hidden flex flex-col"
+              style={{ backgroundColor: "var(--bg-primary)" }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="学习进度"
+            >
+              {/* 顶栏占位（顶栏在其上方，可点击关闭） */}
+              <div className="min-h-10 safe-area-pt flex-shrink-0" />
+              <div className="flex-1 overflow-y-auto min-h-0" style={{ WebkitOverflowScrolling: "touch" }}>
+                <Progress />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

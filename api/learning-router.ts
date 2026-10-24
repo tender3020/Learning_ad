@@ -101,10 +101,28 @@ export const learningRouter = createRouter({
       const db = getDb();
       const userId = ctx.user.id;
 
+      const existing = await db
+        .select({ currentDay: learningPlans.currentDay })
+        .from(learningPlans)
+        .where(
+          and(
+            eq(learningPlans.id, input.planId),
+            eq(learningPlans.userId, userId)
+          )
+        )
+        .limit(1);
+
+      if (existing.length === 0) {
+        return { success: false };
+      }
+
+      // 进度只前进不回退：回看已学过的天不应把列表进度重置回去
+      const nextDay = Math.max(existing[0].currentDay, input.currentDay);
+
       await db
         .update(learningPlans)
         .set({
-          currentDay: input.currentDay,
+          currentDay: nextDay,
           updatedAt: new Date(),
         })
         .where(
@@ -114,7 +132,7 @@ export const learningRouter = createRouter({
           )
         );
 
-      return { success: true };
+      return { success: true, currentDay: nextDay };
     }),
 
   // 完成学习计划

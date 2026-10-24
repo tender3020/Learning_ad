@@ -1,10 +1,11 @@
 import { memo, type RefObject } from "react";
-import type { ReadingFontSize, ReadingLineHeight, ReadingMode } from "@/hooks/useReadingPrefs";
+import type { ReadingFontFamily, ReadingFontSize, ReadingLineHeight, ReadingMode } from "@/hooks/useReadingPrefs";
 
 type ReadingShellProps = {
   mode: ReadingMode;
   fontSize: ReadingFontSize;
   lineHeight: ReadingLineHeight;
+  fontFamily: ReadingFontFamily;
   progressBarRef?: RefObject<HTMLDivElement | null>;
   breakReminder?: boolean;
   onDismissBreak?: () => void;
@@ -18,20 +19,32 @@ const MODE_CLASS: Record<ReadingMode, string> = {
 };
 
 const FONT_CLASS: Record<ReadingFontSize, string> = {
-  sm: "reading-font-sm",
-  md: "reading-font-md",
-  lg: "reading-font-lg",
+  xs: "reading-size-xs",
+  sm: "reading-size-sm",
+  md: "reading-size-md",
+  lg: "reading-size-lg",
+  xl: "reading-size-xl",
 };
 
 const LINE_HEIGHT_CLASS: Record<ReadingLineHeight, string> = {
+  tight: "reading-leading-tight",
   normal: "reading-leading-normal",
   relaxed: "reading-leading-relaxed",
+};
+
+const FAMILY_CLASS: Record<ReadingFontFamily, string> = {
+  system: "reading-font-system",
+  song: "reading-font-song",
+  hei: "reading-font-hei",
+  kai: "reading-font-kai",
+  yuan: "reading-font-yuan",
 };
 
 function ReadingShell({
   mode,
   fontSize,
   lineHeight,
+  fontFamily,
   progressBarRef,
   breakReminder = false,
   onDismissBreak,
@@ -39,7 +52,7 @@ function ReadingShell({
 }: ReadingShellProps) {
   return (
     <div
-      className={`reading-shell ${MODE_CLASS[mode]} ${FONT_CLASS[fontSize]} ${LINE_HEIGHT_CLASS[lineHeight]}`}
+      className={`reading-shell ${MODE_CLASS[mode]} ${FONT_CLASS[fontSize]} ${LINE_HEIGHT_CLASS[lineHeight]} ${FAMILY_CLASS[fontFamily]}`}
     >
       <div className="reading-progress" aria-hidden="true">
         <div ref={progressBarRef} className="reading-progress__bar" style={{ width: "0%" }} />

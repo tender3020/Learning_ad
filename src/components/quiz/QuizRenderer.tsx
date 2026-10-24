@@ -236,11 +236,11 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
             <div
               className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs md:text-sm font-semibold ${
                 submitted && key === quiz.correct
-                  ? "bg-[#34C759] text-white"
+                  ? "bg-[var(--color-success)] text-white"
                   : submitted && selected === key
-                    ? "bg-[#FF3B30] text-white"
+                    ? "bg-[var(--color-danger)] text-white"
                     : selected === key
-                      ? "bg-[#6E56CF] text-white"
+                      ? "bg-[var(--brand-primary)] text-[var(--brand-foreground)]"
                       : "quiz-option-letter"
               }`}
             >
@@ -286,7 +286,7 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
             {/* 对错提示 */}
             <div
               className={`px-4 md:px-5 py-3 flex items-center gap-2 ${
-                isCorrect ? "text-[#34C759]" : "text-[#FF3B30]"
+                isCorrect ? "text-[var(--color-success)]" : "text-[var(--color-danger)]"
               }`}
             >
               {isCorrect ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
@@ -304,8 +304,8 @@ export function QuizCard({ quiz, knowledgeName, onSubmitted }: QuizCardProps) {
               >
                 <div className="p-3 md:p-4 rounded-xl surface-panel">
                   <div className="flex items-center gap-2 mb-2">
-                    <Lightbulb size={14} className="text-[#FF9500]" />
-                    <span className="text-xs font-medium text-[#FF9500]">答案解析</span>
+                    <Lightbulb size={14} className="text-[var(--color-warning)]" />
+                    <span className="text-xs font-medium text-[var(--color-warning)]">答案解析</span>
                   </div>
                   <MathText
                     as="p"

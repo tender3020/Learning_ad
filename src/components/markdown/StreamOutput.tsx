@@ -49,7 +49,7 @@ export default function StreamOutput({ content, isStreaming, className = "" }: S
     <div ref={containerRef} className={`overflow-y-auto ${className}`}>
       <MarkdownRenderer content={displayedContent} />
       {isStreaming && currentIndex < content.length && (
-        <span className="typing-cursor inline-block w-0.5 h-5 bg-[#6E56CF] ml-0.5 align-middle" />
+        <span className="typing-cursor inline-block w-0.5 h-5 bg-[var(--brand-primary)] ml-0.5 align-middle" />
       )}
     </div>
   );

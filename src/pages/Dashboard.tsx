@@ -5,7 +5,7 @@ import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { useLearningStore } from "@/stores/useLearningStore";
 import WireframeSphere from "@/components/3d/WireframeSphere";
-import SwipeablePlanItem from "@/components/SwipeablePlanItem";
+import PlanItem from "@/components/PlanItem";
 import {
   Target,
   Sparkles,
@@ -16,12 +16,50 @@ import {
   CheckCircle2,
   Trash2,
   ArrowRight,
+  Check,
+  Pin,
 } from "lucide-react";
 
-export default function Dashboard() {
+function pinKey(userId: number) {
+  return `yizhi-pinned-plans-${userId}`;
+}
+
+function loadPinned(userId: number): number[] {
+  try {
+    const raw = localStorage.getItem(pinKey(userId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((n) => typeof n === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePinned(userId: number, ids: number[]) {
+  localStorage.setItem(pinKey(userId), JSON.stringify(ids));
+}
+
+function sortByPin<T extends { id: number }>(list: T[], pinned: number[]): T[] {
+  const rank = new Map(pinned.map((id, i) => [id, i]));
+  return [...list].sort((a, b) => {
+    const pa = rank.has(a.id);
+    const pb = rank.has(b.id);
+    if (pa && pb) return (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0);
+    if (pa) return -1;
+    if (pb) return 1;
+    return 0;
+  });
+}
+
+type DashboardProps = {
+  embedded?: boolean;
+  onPlanActivated?: () => void;
+};
+
+export default function Dashboard({ embedded, onPlanActivated }: DashboardProps = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const store = useLearningStore();
+  const userId = user?.id || 0;
 
   const { data: plans, isLoading: plansLoading } = trpc.learning.getPlans.useQuery();
   const completePlan = trpc.learning.completePlan.useMutation({
@@ -32,13 +70,17 @@ export default function Dashboard() {
   const [completingId, setCompletingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pinnedIds, setPinnedIds] = useState<number[]>(() => (userId ? loadPinned(userId) : []));
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [menuPlanId, setMenuPlanId] = useState<number | null>(null);
 
   const deletePlan = trpc.learning.deletePlan.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       utils.learning.getPlans.invalidate();
       setDeleteTarget(null);
       setDeletingId(null);
-      if (deleteTarget === store.currentPlanId) {
+      if (vars.planId === store.currentPlanId) {
         store.reset();
       }
     },
@@ -48,18 +90,47 @@ export default function Dashboard() {
   });
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeletingId(deleteTarget);
-    await deletePlan.mutateAsync({ planId: deleteTarget });
+    const ids = selectMode && selectedIds.size > 0 ? [...selectedIds] : deleteTarget ? [deleteTarget] : [];
+    if (ids.length === 0) return;
+    setDeletingId(ids[0]);
+    for (const id of ids) {
+      await deletePlan.mutateAsync({ planId: id });
+      if (userId) {
+        const next = loadPinned(userId).filter((pid) => pid !== id);
+        savePinned(userId, next);
+        setPinnedIds(next);
+      }
+    }
+    setSelectMode(false);
+    setSelectedIds(new Set());
   };
 
-  const activePlans = plans?.filter((p) => p.status === "active") || [];
-  const completedPlans = plans?.filter((p) => p.status === "completed") || [];
+  const activePlans = sortByPin(plans?.filter((p) => p.status === "active") || [], pinnedIds);
+  const completedPlans = sortByPin(plans?.filter((p) => p.status === "completed") || [], pinnedIds);
   const activeCount = activePlans.length;
   const canCreateNew = activeCount < 7;
   const progress = store.totalDays > 0 ? Math.round((store.currentDay / store.totalDays) * 100) : 0;
+  const menuPlan = plans?.find((p) => p.id === menuPlanId) || null;
+
+  const togglePin = (planId: number) => {
+    if (!userId) return;
+    setPinnedIds((prev) => {
+      const next = prev.includes(planId) ? prev.filter((id) => id !== planId) : [planId, ...prev.filter((id) => id !== planId)];
+      savePinned(userId, next);
+      return next;
+    });
+  };
 
   const switchToPlan = (plan: NonNullable<typeof plans>[0]) => {
+    if (selectMode) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(plan.id)) next.delete(plan.id);
+        else next.add(plan.id);
+        return next;
+      });
+      return;
+    }
     store.restoreFromDB(
       {
         id: plan.id,
@@ -68,8 +139,9 @@ export default function Dashboard() {
         totalDays: plan.totalDays,
         currentDay: plan.currentDay,
       },
-      user?.id || 0,
+      userId,
     );
+    onPlanActivated?.();
   };
 
   const handleCompletePlan = async (planId: number) => {
@@ -90,6 +162,15 @@ export default function Dashboard() {
   }
 
   const hasAnyPlan = plans && plans.length > 0;
+
+  if (!hasAnyPlan && embedded) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <p className="text-sm text-token-secondary mb-1">还没有学习计划</p>
+        <p className="type-caption text-token-secondary">点右上角新建，让 AI 为你定制学习路径</p>
+      </div>
+    );
+  }
 
   if (!hasAnyPlan) {
     return (
@@ -115,7 +196,7 @@ export default function Dashboard() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => navigate("/onboarding")}
-              className="inline-flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 text-white rounded-2xl font-medium text-base md:text-lg transition-colors brand-glow mb-8 bg-token-brand hover:opacity-90"
+              className="inline-flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 text-[var(--brand-foreground)] rounded-2xl font-medium text-base md:text-lg transition-colors brand-glow mb-8 bg-token-brand hover:opacity-90"
             >
               <Sparkles size={20} />
               创建你的第一个学习计划
@@ -139,9 +220,10 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="h-full relative overflow-y-auto">
-      <div className="relative z-10 px-3 py-3 md:p-8 max-w-4xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-6">
+    <div className={embedded ? "relative" : "h-full relative overflow-y-auto"}>
+      <div className={embedded ? "relative z-10 px-3 pb-4" : "relative z-10 px-3 py-3 md:p-8 max-w-4xl mx-auto"}>
+        {!embedded && (
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-6 hidden md:block">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <h1 className="text-lg md:text-3xl font-semibold text-token-primary mb-0.5">学习计划</h1>
@@ -153,13 +235,14 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => navigate("/onboarding")}
-                className="flex items-center gap-1 px-2 py-1 md:px-3 md:py-1.5 text-white rounded-lg type-caption font-medium transition-colors bg-token-brand hover:opacity-90"
+                className="ml-auto flex items-center gap-1 px-2 py-1 md:px-3 md:py-1.5 text-[var(--brand-foreground)] rounded-lg type-caption font-medium transition-colors bg-token-brand hover:opacity-90"
               >
                 <Plus size={12} /> 新建
               </button>
             )}
           </div>
         </motion.div>
+        )}
 
         {store.currentPlanId && (
           <motion.div
@@ -177,8 +260,11 @@ export default function Dashboard() {
               </div>
               <button
                 type="button"
-                onClick={() => navigate("/today")}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs md:text-sm font-medium text-white flex-shrink-0 bg-token-brand hover:opacity-90 brand-glow"
+                onClick={() => {
+                  navigate("/today");
+                  onPlanActivated?.();
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs md:text-sm font-medium text-[var(--brand-foreground)] flex-shrink-0 bg-token-brand hover:opacity-90 brand-glow"
               >
                 今日学习 <ArrowRight size={14} />
               </button>
@@ -233,47 +319,148 @@ export default function Dashboard() {
             </div>
           )}
 
-          {activePlans.length > 0 && (
-            <div className="space-y-2 mb-4">
-              <p className="type-caption text-token-secondary uppercase tracking-wider">进行中</p>
-              {activePlans.map((plan) => (
-                <SwipeablePlanItem
+          <div className="space-y-2 mb-4">
+            <p className="type-caption text-token-secondary uppercase tracking-wider">
+              进行中{activePlans.length > 0 ? ` · ${activePlans.length}` : ""}
+            </p>
+            {activePlans.length > 0 ? (
+              activePlans.map((plan) => (
+                <PlanItem
                   key={plan.id}
-                  plan={plan}
+                  plan={plan.id === store.currentPlanId
+                    ? { ...plan, currentDay: Math.max(plan.currentDay, store.currentDay) }
+                    : plan}
                   isCurrent={plan.id === store.currentPlanId}
+                  isPinned={pinnedIds.includes(plan.id)}
+                  selectMode={selectMode}
+                  selected={selectedIds.has(plan.id)}
                   onSelect={() => switchToPlan(plan)}
-                  onDelete={() => setDeleteTarget(plan.id)}
+                  onLongPress={() => setMenuPlanId(plan.id)}
                 />
-              ))}
-            </div>
-          )}
+              ))
+            ) : (
+              <p className="type-caption text-token-secondary px-1 py-2">暂无进行中的计划</p>
+            )}
+          </div>
 
-          {completedPlans.length > 0 && (
-            <div className="space-y-2">
-              <p className="type-caption text-token-secondary uppercase tracking-wider">已完成</p>
-              {completedPlans.map((plan) => (
-                <SwipeablePlanItem
+          <div className="space-y-2">
+            <p className="type-caption text-token-secondary uppercase tracking-wider">
+              已完成{completedPlans.length > 0 ? ` · ${completedPlans.length}` : ""}
+            </p>
+            {completedPlans.length > 0 ? (
+              completedPlans.map((plan) => (
+                <PlanItem
                   key={plan.id}
-                  plan={plan}
+                  plan={plan.id === store.currentPlanId
+                    ? { ...plan, currentDay: Math.max(plan.currentDay, store.currentDay) }
+                    : plan}
                   isCurrent={plan.id === store.currentPlanId}
+                  isPinned={pinnedIds.includes(plan.id)}
+                  selectMode={selectMode}
+                  selected={selectedIds.has(plan.id)}
                   onSelect={() => switchToPlan(plan)}
-                  onDelete={() => setDeleteTarget(plan.id)}
+                  onLongPress={() => setMenuPlanId(plan.id)}
                 />
-              ))}
-            </div>
-          )}
+              ))
+            ) : (
+              <p className="type-caption text-token-secondary px-1 py-2">暂无已完成的计划</p>
+            )}
+          </div>
 
-          {canCreateNew && (
+          {!embedded && canCreateNew && (
             <button
               type="button"
               onClick={() => navigate("/onboarding")}
-              className="w-full mt-3 py-3 border border-dashed rounded-xl text-token-brand-light hover:bg-token-brand-muted transition-colors flex items-center justify-center gap-2 text-sm"
+              className="hidden md:flex w-full mt-3 py-3 border border-dashed rounded-xl text-token-brand-light hover:bg-token-brand-muted transition-colors items-center justify-center gap-2 text-sm"
               style={{ borderColor: "color-mix(in srgb, var(--brand-primary) 35%, transparent)" }}
             >
               <Plus size={16} /> 添加新的学习计划
             </button>
           )}
+
+          {selectMode && (
+            <div className="sticky bottom-0 mt-4 flex items-center gap-2 py-3" style={{ backgroundColor: "var(--bg-primary)" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectMode(false);
+                  setSelectedIds(new Set());
+                }}
+                className="px-3 py-2 text-sm text-token-secondary"
+              >
+                取消
+              </button>
+              <span className="flex-1 text-sm text-token-secondary">已选 {selectedIds.size} 项</span>
+              <button
+                type="button"
+                disabled={selectedIds.size === 0}
+                onClick={() => setDeleteTarget([...selectedIds][0])}
+                className="px-3 py-2 text-sm font-medium disabled:opacity-40"
+                style={{ color: "var(--color-danger)" }}
+              >
+                删除
+              </button>
+            </div>
+          )}
         </div>
+
+        <AnimatePresence>
+          {menuPlan && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-start justify-center px-8 pt-36"
+              style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 35%, transparent)" }}
+              onClick={() => setMenuPlanId(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.94, opacity: 0, y: -8 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.96, opacity: 0 }}
+                className="w-full max-w-[240px] rounded-2xl overflow-hidden"
+                style={{
+                  backgroundColor: "var(--surface-elevated)",
+                  boxShadow: "0 12px 40px color-mix(in srgb, var(--text-primary) 18%, transparent)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-token-primary hover-surface"
+                  onClick={() => {
+                    setSelectedIds(new Set([menuPlan.id]));
+                    setSelectMode(true);
+                    setMenuPlanId(null);
+                  }}
+                >
+                  <Check size={16} /> 多选
+                </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-token-primary hover-surface"
+                  onClick={() => {
+                    togglePin(menuPlan.id);
+                    setMenuPlanId(null);
+                  }}
+                >
+                  <Pin size={16} /> {pinnedIds.includes(menuPlan.id) ? "取消置顶" : "置顶"}
+                </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-sm hover-surface"
+                  style={{ color: "var(--color-danger)" }}
+                  onClick={() => {
+                    setDeleteTarget(menuPlan.id);
+                    setMenuPlanId(null);
+                  }}
+                >
+                  <Trash2 size={16} /> 删除
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {deleteTarget !== null && (
@@ -306,7 +493,9 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <p className="text-xs md:text-sm text-token-secondary mb-5 leading-relaxed">
-                  删除后，该计划的所有大纲、内容、答题与问答记录将被永久删除。
+                  {selectMode && selectedIds.size > 1
+                    ? `将删除 ${selectedIds.size} 个计划及其大纲、内容与问答记录，此操作不可撤销。`
+                    : "删除后，该计划的所有大纲、内容、答题与问答记录将被永久删除。"}
                 </p>
                 <div className="flex gap-3">
                   <button

@@ -59,7 +59,7 @@ function OrbitRings() {
       <mesh>
         <icosahedronGeometry args={[2, 1]} />
         <meshBasicMaterial
-          color="#6E56CF"
+          color="#8E8E96"
           wireframe
           transparent
           opacity={0.08}
@@ -93,7 +93,7 @@ function OrbitRings() {
       <mesh>
         <sphereGeometry args={[3.5, 32, 32]} />
         <meshBasicMaterial
-          color="#6E56CF"
+          color="#8E8E96"
           transparent
           opacity={0.02}
           side={THREE.BackSide}
@@ -123,7 +123,7 @@ export default function WireframeSphere({ opacity = 0.3 }: { opacity?: number })
         gl={{ alpha: true, antialias: true }}
       >
         <ambientLight intensity={0.3} />
-        <pointLight position={[5, 5, 5]} intensity={0.5} color="#6E56CF" />
+        <pointLight position={[5, 5, 5]} intensity={0.5} color="#8E8E96" />
         <OrbitRings />
       </Canvas>
     </div>

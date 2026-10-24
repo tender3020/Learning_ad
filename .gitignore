@@ -39,6 +39,7 @@ dist/
 build/
 # Generated learning illustrations (persist on server, do not commit)
 data/uploads/content-images/
+data/uploads/avatars/
 # Test coverage
 coverage/
 .nyc_output/

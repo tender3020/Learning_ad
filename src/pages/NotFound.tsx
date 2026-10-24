@@ -9,7 +9,7 @@ export default function NotFound() {
         <p className="text-sm text-token-secondary mb-6">页面不存在或已被移动</p>
         <Link
           to="/today"
-          className="inline-flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium text-white bg-token-brand hover:opacity-90 transition-opacity"
+          className="inline-flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium text-[var(--brand-foreground)] bg-token-brand hover:opacity-90 transition-opacity"
         >
           <Sparkles size={16} />
           返回今日学习

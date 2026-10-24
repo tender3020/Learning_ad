@@ -110,7 +110,7 @@ export default function Login() {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-4 p-3 rounded-xl bg-[rgba(255,59,48,0.1)] border border-[rgba(255,59,48,0.2)] text-sm text-[#FF3B30] text-center"
+              className="mb-4 p-3 rounded-xl bg-[rgba(255,59,48,0.1)] border border-[rgba(255,59,48,0.2)] text-sm text-[var(--color-danger)] text-center"
             >
               {error}
             </motion.div>
@@ -149,7 +149,7 @@ export default function Login() {
               </div>
 
               {/* Dev hint */}
-              <div className="mb-6 p-3 rounded-xl bg-[rgba(110,86,207,0.08)] border border-[rgba(110,86,207,0.15)]">
+              <div className="mb-6 p-3 rounded-xl bg-[rgba(var(--brand-rgb),0.08)] border border-[rgba(var(--brand-rgb),0.15)]">
                 <p className="text-xs text-token-brand-light flex items-center gap-1.5">
                   <Sparkles size={12} />
                   开发模式：验证码固定为 123456

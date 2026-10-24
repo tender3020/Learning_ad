@@ -1,9 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
 import { syncNativeStatusBarStyle } from "@/lib/nativeStatusBar";
 import WireframeSphere from "@/components/3d/WireframeSphere";
+import UserAvatar, { readImageAsJpeg } from "@/components/UserAvatar";
 import { Switch } from "@/components/ui/switch";
 import {
   User,
@@ -24,6 +25,7 @@ import {
   Eye,
   Database,
   FileText,
+  Camera,
 } from "lucide-react";
 
 // 本地设置类型
@@ -98,6 +100,9 @@ export default function Settings() {
   // 个人信息编辑
   const [editName, setEditName] = useState(user?.name || "");
   const [savingName, setSavingName] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const updateProfile = trpc.user.updateProfile.useMutation({
     onSuccess: () => {
@@ -110,12 +115,37 @@ export default function Settings() {
     },
   });
 
+  const updateAvatar = trpc.user.updateAvatar.useMutation({
+    onSuccess: () => {
+      utils.user.me.invalidate();
+      setUploadingAvatar(false);
+      setAvatarError("");
+    },
+    onError: (err) => {
+      setUploadingAvatar(false);
+      setAvatarError(err.message || "头像上传失败");
+    },
+  });
+
   const displayName = user?.name || (user?.phone ? `用户${user.phone.slice(-4)}` : "学习者");
 
   const handleUpdateName = async () => {
     if (!editName.trim()) return;
     setSavingName(true);
     await updateProfile.mutateAsync({ name: editName.trim() });
+  };
+
+  const handlePickAvatar = async (file?: File) => {
+    if (!file) return;
+    setAvatarError("");
+    setUploadingAvatar(true);
+    try {
+      const dataUrl = await readImageAsJpeg(file);
+      await updateAvatar.mutateAsync({ dataUrl });
+    } catch (err) {
+      setUploadingAvatar(false);
+      setAvatarError(err instanceof Error ? err.message : "头像上传失败");
+    }
   };
 
   const toggleSetting = useCallback((key: keyof LocalSettings) => {
@@ -167,7 +197,7 @@ export default function Settings() {
         {notifyMsg && (
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
             className="fixed top-16 left-0 right-0 z-[70] flex justify-center pointer-events-none">
-            <div className="liquid-glass px-4 py-2 rounded-full text-xs text-[#FF9500]">{notifyMsg}</div>
+            <div className="liquid-glass px-4 py-2 rounded-full text-xs text-[var(--color-warning)]">{notifyMsg}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -175,17 +205,20 @@ export default function Settings() {
       <div className="relative z-10 px-3 py-3 md:p-8 max-w-3xl mx-auto">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-8">
-          <h1 className="text-lg md:text-3xl font-semibold mb-1 md:mb-2" style={{ color: 'var(--text-primary)' }}>设置</h1>
-          <p className="text-xs md:text-sm" style={{ color: 'var(--text-secondary)' }}>管理你的账户和偏好设置</p>
+          <h1 className="hidden md:block text-lg md:text-3xl font-semibold mb-1 md:mb-2" style={{ color: 'var(--text-primary)' }}>设置</h1>
+          <p className="hidden md:block text-xs md:text-sm" style={{ color: 'var(--text-secondary)' }}>管理你的账户和偏好设置</p>
         </motion.div>
 
         {/* Profile Card */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="liquid-glass rounded-xl md:rounded-2xl p-3 md:p-6 mb-3 md:mb-6">
           <div className="flex items-center gap-2.5 md:gap-4">
-            <div className="w-10 h-10 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-[#6E56CF] to-[#A78BFA] flex items-center justify-center flex-shrink-0">
-              <span className="text-sm md:text-xl font-semibold text-white">{displayName[0]?.toUpperCase() || "U"}</span>
-            </div>
+            <UserAvatar
+              name={displayName}
+              avatar={user?.avatar}
+              className="w-10 h-10 md:w-16 md:h-16"
+              textClassName="text-sm md:text-xl"
+            />
             <div className="min-w-0 flex-1">
               <h2 className="text-sm md:text-lg font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{displayName}</h2>
               <p className="type-caption md:text-sm" style={{ color: 'var(--text-secondary)' }}>{user?.phone?.replace(/(\d{3})(\d{4})(\d{4})/, "$1****$3") || "未绑定手机号"}</p>
@@ -206,8 +239,8 @@ export default function Settings() {
             {/* 个人信息 */}
             <button onClick={() => { setEditName(user?.name || ""); setActiveModal("profile"); }}
               className="w-full flex items-center gap-2.5 md:gap-4 p-2.5 md:p-4 text-left transition-all hover:bg-[rgba(255,255,255,0.02)] border-b border-[rgba(255,255,255,0.05)]">
-              <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-[rgba(110,86,207,0.1)] flex items-center justify-center flex-shrink-0">
-                <User size={14} className="text-[#6E56CF]" />
+              <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-[rgba(var(--brand-rgb),0.1)] flex items-center justify-center flex-shrink-0">
+                <User size={14} className="text-[var(--brand-primary)]" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>个人信息</p>
@@ -220,7 +253,7 @@ export default function Settings() {
             <button onClick={() => setActiveModal("notifications")}
               className="w-full flex items-center gap-2.5 md:gap-4 p-2.5 md:p-4 text-left transition-all hover:bg-[rgba(255,255,255,0.02)] border-b border-[rgba(255,255,255,0.05)]">
               <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-[rgba(255,149,0,0.1)] flex items-center justify-center flex-shrink-0">
-                <Bell size={14} className="text-[#FF9500]" />
+                <Bell size={14} className="text-[var(--color-warning)]" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>通知设置</p>
@@ -228,7 +261,7 @@ export default function Settings() {
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 {(settings.notifyStudyReminder || settings.notifyNewContent) && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#34C759]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)]" />
                 )}
                 <ChevronRight size={14} style={{ color: 'var(--text-secondary)' }} />
               </div>
@@ -238,7 +271,7 @@ export default function Settings() {
             <button onClick={() => setActiveModal("privacy")}
               className="w-full flex items-center gap-2.5 md:gap-4 p-2.5 md:p-4 text-left transition-all hover:bg-[rgba(255,255,255,0.02)]">
               <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-[rgba(52,199,89,0.1)] flex items-center justify-center flex-shrink-0">
-                <Shield size={14} className="text-[#34C759]" />
+                <Shield size={14} className="text-[var(--color-success)]" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>隐私安全</p>
@@ -259,7 +292,7 @@ export default function Settings() {
             <button onClick={() => setActiveModal("theme")}
               className="w-full flex items-center gap-2.5 md:gap-4 p-2.5 md:p-4 text-left transition-all hover:bg-[rgba(255,255,255,0.02)] border-b border-[rgba(255,255,255,0.05)]">
               <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-[rgba(167,139,250,0.1)] flex items-center justify-center flex-shrink-0">
-                <Palette size={14} className="text-[#A78BFA]" />
+                <Palette size={14} className="text-[var(--brand-secondary)]" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>主题外观</p>
@@ -272,7 +305,7 @@ export default function Settings() {
             <button onClick={() => setActiveModal("language")}
               className="w-full flex items-center gap-2.5 md:gap-4 p-2.5 md:p-4 text-left transition-all hover:bg-[rgba(255,255,255,0.02)]">
               <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-[rgba(10,132,255,0.1)] flex items-center justify-center flex-shrink-0">
-                <Globe size={14} className="text-[#0A84FF]" />
+                <Globe size={14} className="text-[var(--color-info)]" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>语言</p>
@@ -288,10 +321,10 @@ export default function Settings() {
           <button onClick={() => setShowLogoutConfirm(true)}
             className="w-full liquid-glass rounded-xl md:rounded-2xl p-2.5 md:p-4 flex items-center gap-2.5 md:gap-4 text-left hover:bg-[rgba(255,59,48,0.05)] transition-all">
             <div className="w-7 h-7 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-[rgba(255,59,48,0.1)] flex items-center justify-center flex-shrink-0">
-              <LogOut size={14} className="text-[#FF3B30]" />
+              <LogOut size={14} className="text-[var(--color-danger)]" />
             </div>
             <div>
-              <p className="text-xs md:text-sm font-medium text-[#FF3B30]">退出登录</p>
+              <p className="text-xs md:text-sm font-medium text-[var(--color-danger)]">退出登录</p>
               <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>退出当前账户</p>
             </div>
           </button>
@@ -301,12 +334,46 @@ export default function Settings() {
         <AnimatePresence>
           {/* --- 个人信息弹窗 --- */}
           {activeModal === "profile" && (
-            <ModalWrapper onClose={() => setActiveModal(null)} title="个人信息" icon={<User size={16} className="text-[#6E56CF]" />}>
+            <ModalWrapper onClose={() => setActiveModal(null)} title="个人信息" icon={<User size={16} className="text-[var(--brand-primary)]" />}>
               <div className="space-y-4">
-                <div className="flex items-center justify-center mb-4">
-                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-[#6E56CF] to-[#A78BFA] flex items-center justify-center">
-                    <span className="text-xl md:text-2xl font-semibold text-white">{displayName[0]?.toUpperCase() || "U"}</span>
-                  </div>
+                <div className="flex flex-col items-center mb-4">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      handlePickAvatar(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="relative"
+                    aria-label="上传头像"
+                  >
+                    <UserAvatar
+                      name={displayName}
+                      avatar={user?.avatar}
+                      className="w-16 h-16 md:w-20 md:h-20"
+                      textClassName="text-xl md:text-2xl"
+                    />
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: "var(--surface-elevated)", border: "1px solid var(--surface-border-strong)" }}
+                    >
+                      {uploadingAvatar ? (
+                        <span className="w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--text-secondary)", borderTopColor: "transparent" }} />
+                      ) : (
+                        <Camera size={13} className="text-token-secondary" />
+                      )}
+                    </span>
+                  </button>
+                  <p className="type-caption text-token-secondary mt-2">点击更换头像</p>
+                  {avatarError && <p className="type-caption mt-1" style={{ color: "var(--color-danger)" }}>{avatarError}</p>}
                 </div>
                 <div>
                   <label className="text-xs mb-1.5 block" style={{ color: 'var(--text-secondary)' }}>昵称</label>
@@ -322,7 +389,7 @@ export default function Settings() {
                   </div>
                 </div>
                 <button onClick={handleUpdateName} disabled={savingName || !editName.trim()}
-                  className="w-full py-3 bg-[#6E56CF] hover:bg-[#5A45B0] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[#8A8A8E] text-white rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2">
+                  className="w-full py-3 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] disabled:bg-[rgba(255,255,255,0.05)] disabled:text-[var(--text-secondary)] text-[var(--brand-foreground)] rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2">
                   {savingName ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
@@ -335,12 +402,12 @@ export default function Settings() {
 
           {/* --- 通知设置弹窗 --- */}
           {activeModal === "notifications" && (
-            <ModalWrapper onClose={() => setActiveModal(null)} title="通知设置" icon={<Bell size={16} className="text-[#FF9500]" />}>
+            <ModalWrapper onClose={() => setActiveModal(null)} title="通知设置" icon={<Bell size={16} className="text-[var(--color-warning)]" />}>
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-3 rounded-xl border"
                   style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
                   <div className="flex items-center gap-3">
-                    <Clock size={16} className="text-[#6E56CF]" />
+                    <Clock size={16} className="text-[var(--brand-primary)]" />
                     <div>
                       <p className="text-sm" style={{ color: 'var(--text-primary)' }}>学习提醒</p>
                       <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>每日学习提醒通知</p>
@@ -351,7 +418,7 @@ export default function Settings() {
                 <div className="flex items-center justify-between p-3 rounded-xl border"
                   style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
                   <div className="flex items-center gap-3">
-                    <Smartphone size={16} className="text-[#34C759]" />
+                    <Smartphone size={16} className="text-[var(--color-success)]" />
                     <div>
                       <p className="text-sm" style={{ color: 'var(--text-primary)' }}>新内容推送</p>
                       <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>学习内容生成完成时通知</p>
@@ -362,7 +429,7 @@ export default function Settings() {
                 <div className="flex items-center justify-between p-3 rounded-xl border opacity-40"
                   style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
                   <div className="flex items-center gap-3">
-                    <Mail size={16} className="text-[#A78BFA]" />
+                    <Mail size={16} className="text-[var(--brand-secondary)]" />
                     <div>
                       <p className="text-sm" style={{ color: 'var(--text-primary)' }}>邮件通知</p>
                       <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>学习周报和进度报告（即将上线）</p>
@@ -372,7 +439,7 @@ export default function Settings() {
                 </div>
 
                 {/* 通知说明 */}
-                <div className="p-3 rounded-xl border" style={{ backgroundColor: 'rgba(110,86,207,0.05)', borderColor: 'rgba(110,86,207,0.1)' }}>
+                <div className="p-3 rounded-xl border" style={{ backgroundColor: 'rgba(var(--brand-rgb),0.05)', borderColor: 'rgba(var(--brand-rgb),0.1)' }}>
                   <p className="type-caption leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                     通知通过浏览器推送发送。开启后，系统会在你设置的学习时间发送提醒。
                     请确保浏览器允许通知权限。
@@ -384,33 +451,33 @@ export default function Settings() {
 
           {/* --- 主题外观弹窗 --- */}
           {activeModal === "theme" && (
-            <ModalWrapper onClose={() => setActiveModal(null)} title="主题外观" icon={<Palette size={16} className="text-[#A78BFA]" />}>
+            <ModalWrapper onClose={() => setActiveModal(null)} title="主题外观" icon={<Palette size={16} className="text-[var(--brand-secondary)]" />}>
               <div className="space-y-3">
                 <button onClick={() => setTheme("dark")}
                   className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                    settings.theme === "dark" ? "bg-[rgba(110,86,207,0.1)] border-[rgba(110,86,207,0.3)]" : "border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.04)]"
+                    settings.theme === "dark" ? "bg-[rgba(var(--brand-rgb),0.1)] border-[rgba(var(--brand-rgb),0.3)]" : "border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.04)]"
                   }`}>
-                  <div className="w-10 h-10 rounded-lg border border-[rgba(255,255,255,0.1)] flex items-center justify-center" style={{ background: '#1a1a2e' }}>
-                    <Moon size={18} className="text-[#A78BFA]" />
+                  <div className="w-10 h-10 rounded-lg border border-[rgba(255,255,255,0.1)] flex items-center justify-center" style={{ background: '#0E0E11' }}>
+                    <Moon size={18} className="text-[var(--brand-secondary)]" />
                   </div>
                   <div className="flex-1 text-left">
                     <p className="text-sm" style={{ color: 'var(--text-primary)' }}>深色模式</p>
                     <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>护眼的暗色背景</p>
                   </div>
-                  {settings.theme === "dark" && <Check size={18} className="text-[#6E56CF]" />}
+                  {settings.theme === "dark" && <Check size={18} className="text-[var(--brand-primary)]" />}
                 </button>
                 <button onClick={() => setTheme("light")}
                   className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                    settings.theme === "light" ? "bg-[rgba(110,86,207,0.1)] border-[rgba(110,86,207,0.3)]" : "border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.04)]"
+                    settings.theme === "light" ? "bg-[rgba(var(--brand-rgb),0.1)] border-[rgba(var(--brand-rgb),0.3)]" : "border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.04)]"
                   }`}>
                   <div className="w-10 h-10 rounded-lg border flex items-center justify-center" style={{ background: '#F5F5F7', borderColor: 'rgba(0,0,0,0.1)' }}>
-                    <Sun size={18} className="text-[#FF9500]" />
+                    <Sun size={18} className="text-[var(--color-warning)]" />
                   </div>
                   <div className="flex-1 text-left">
                     <p className="text-sm" style={{ color: 'var(--text-primary)' }}>浅色模式</p>
                     <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>明亮的阅读体验</p>
                   </div>
-                  {settings.theme === "light" && <Check size={18} className="text-[#6E56CF]" />}
+                  {settings.theme === "light" && <Check size={18} className="text-[var(--brand-primary)]" />}
                 </button>
               </div>
             </ModalWrapper>
@@ -418,24 +485,24 @@ export default function Settings() {
 
           {/* --- 隐私安全弹窗 --- */}
           {activeModal === "privacy" && (
-            <ModalWrapper onClose={() => setActiveModal(null)} title="隐私安全" icon={<Shield size={16} className="text-[#34C759]" />}>
+            <ModalWrapper onClose={() => setActiveModal(null)} title="隐私安全" icon={<Shield size={16} className="text-[var(--color-success)]" />}>
               <div className="space-y-4">
                 <div className="flex items-start gap-3 p-3 rounded-xl border" style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                  <Eye size={16} className="text-[#6E56CF] flex-shrink-0 mt-0.5" />
+                  <Eye size={16} className="text-[var(--brand-primary)] flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm mb-1" style={{ color: 'var(--text-primary)' }}>数据可见性</p>
                     <p className="type-caption leading-relaxed" style={{ color: 'var(--text-secondary)' }}>你的学习数据仅存储在你的账户下，不会与其他用户共享。AI 问答内容仅用于提供更好的学习建议。</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-xl border" style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                  <Database size={16} className="text-[#34C759] flex-shrink-0 mt-0.5" />
+                  <Database size={16} className="text-[var(--color-success)] flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm mb-1" style={{ color: 'var(--text-primary)' }}>数据存储</p>
                     <p className="type-caption leading-relaxed" style={{ color: 'var(--text-secondary)' }}>所有学习数据存储在加密的数据库中。你的手机号仅用于登录认证，不会用于其他用途。</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-xl border" style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                  <FileText size={16} className="text-[#FF9500] flex-shrink-0 mt-0.5" />
+                  <FileText size={16} className="text-[var(--color-warning)] flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm mb-1" style={{ color: 'var(--text-primary)' }}>AI 使用说明</p>
                     <p className="type-caption leading-relaxed" style={{ color: 'var(--text-secondary)' }}>学习内容由 DeepSeek AI 生成，仅供学习参考。问答交互数据可能被用于改进 AI 回复质量。</p>
@@ -447,15 +514,15 @@ export default function Settings() {
 
           {/* --- 语言弹窗 --- */}
           {activeModal === "language" && (
-            <ModalWrapper onClose={() => setActiveModal(null)} title="语言设置" icon={<Globe size={16} className="text-[#0A84FF]" />}>
+            <ModalWrapper onClose={() => setActiveModal(null)} title="语言设置" icon={<Globe size={16} className="text-[var(--color-info)]" />}>
               <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 rounded-xl border border-[rgba(110,86,207,0.3)]" style={{ backgroundColor: 'rgba(110,86,207,0.1)' }}>
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-[rgba(var(--brand-rgb),0.3)]" style={{ backgroundColor: 'rgba(var(--brand-rgb),0.1)' }}>
                   <span className="text-lg">CN</span>
                   <div className="flex-1">
                     <p className="text-sm" style={{ color: 'var(--text-primary)' }}>简体中文</p>
                     <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>当前语言</p>
                   </div>
-                  <Check size={18} className="text-[#6E56CF]" />
+                  <Check size={18} className="text-[var(--brand-primary)]" />
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-xl border opacity-40" style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' }}>
                   <span className="text-lg">EN</span>
@@ -482,7 +549,7 @@ export default function Settings() {
                     className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
                     style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)' }}>取消</button>
                   <button onClick={logout}
-                    className="flex-1 py-2.5 rounded-xl bg-[#FF3B30] text-white text-sm font-medium hover:bg-[#E6352B] transition-all">退出</button>
+                    className="flex-1 py-2.5 rounded-xl bg-[var(--color-danger)] text-white text-sm font-medium hover:opacity-90 transition-all">退出</button>
                 </div>
               </motion.div>
             </motion.div>
