@@ -55,6 +55,8 @@ export default function SwipeCloseSheet({
 
     let start: Point | null = null;
     let locked: null | "h" | "v" = null;
+    let suppressClick = false;
+    let swipeFlagTimer = 0;
 
     const finishClose = (velocity = 0) => {
       if (closingRef.current) return;
@@ -64,6 +66,19 @@ export default function SwipeCloseSheet({
 
     const snapBack = () => {
       void animate(x, 0, SPRING);
+    };
+
+    const markHorizontal = () => {
+      el.dataset.swiping = "1";
+      suppressClick = true;
+    };
+
+    const clearSwipeFlag = () => {
+      window.clearTimeout(swipeFlagTimer);
+      swipeFlagTimer = window.setTimeout(() => {
+        delete el.dataset.swiping;
+        suppressClick = false;
+      }, 320);
     };
 
     const onStart = (e: TouchEvent | PointerEvent) => {
@@ -96,6 +111,7 @@ export default function SwipeCloseSheet({
         } else {
           locked = "v";
         }
+        if (locked === "h") markHorizontal();
       }
 
       if (locked !== "h") return;
@@ -103,19 +119,31 @@ export default function SwipeCloseSheet({
       x.set(side === "left" ? Math.min(0, dx) : Math.max(0, dx));
     };
 
-    const onEnd = () => {
+    const onEnd = (e: Event) => {
       if (!start) return;
       const wasLocked = locked;
       start = null;
       locked = null;
-      if (wasLocked !== "h" || closingRef.current) return;
+      if (wasLocked !== "h") return;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      if (closingRef.current) return;
       const current = x.get();
       const threshold = Math.min(72, window.innerWidth * 0.16);
       const velocity = x.getVelocity();
       const passOffset = side === "left" ? current < -threshold : current > threshold;
       const passFlick = side === "left" ? velocity < -500 : velocity > 500;
       if (passOffset || passFlick) finishClose(velocity);
-      else snapBack();
+      else {
+        snapBack();
+        clearSwipeFlag();
+      }
+    };
+
+    const onClickCapture = (e: MouseEvent) => {
+      if (!suppressClick) return;
+      e.preventDefault();
+      e.stopPropagation();
     };
 
     const touchStart = (e: TouchEvent) => onStart(e);
@@ -137,8 +165,11 @@ export default function SwipeCloseSheet({
     el.addEventListener("pointermove", pointerMove, { capture: true });
     el.addEventListener("pointerup", onEnd, { capture: true });
     el.addEventListener("pointercancel", onEnd, { capture: true });
+    el.addEventListener("click", onClickCapture, true);
 
     return () => {
+      window.clearTimeout(swipeFlagTimer);
+      delete el.dataset.swiping;
       el.removeEventListener("touchstart", touchStart, true);
       el.removeEventListener("touchmove", touchMove, true);
       el.removeEventListener("touchend", onEnd, true);
@@ -147,6 +178,7 @@ export default function SwipeCloseSheet({
       el.removeEventListener("pointermove", pointerMove, true);
       el.removeEventListener("pointerup", onEnd, true);
       el.removeEventListener("pointercancel", onEnd, true);
+      el.removeEventListener("click", onClickCapture, true);
     };
   }, [open, side, x]);
 

@@ -1152,6 +1152,11 @@ html.reading-immersive .reading-article {
   height: calc(env(safe-area-inset-top, 0px) + 2.5rem);
 }
 
+/* 抽屉横向滑动关闭时，不把手指落到的卡片当成点击 */
+[data-swiping="1"] > * {
+  pointer-events: none;
+}
+
 /* 贴在可见视口上，键盘弹出时不会被顶进状态栏 */
 .app-vv-fill {
   position: fixed;

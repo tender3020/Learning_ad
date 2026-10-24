@@ -32,6 +32,7 @@ export default function PlanItem({
   const timerRef = useRef<number | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const longPressed = useRef(false);
+  const moved = useRef(false);
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -40,10 +41,17 @@ export default function PlanItem({
     }
   };
 
+  const resetGesture = () => {
+    clearTimer();
+    startRef.current = null;
+    moved.current = false;
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
-    if (selectMode) return;
     longPressed.current = false;
+    moved.current = false;
     startRef.current = { x: e.clientX, y: e.clientY };
+    if (selectMode) return;
     timerRef.current = window.setTimeout(() => {
       longPressed.current = true;
       onLongPress();
@@ -53,14 +61,19 @@ export default function PlanItem({
   const onPointerMove = (e: React.PointerEvent) => {
     const start = startRef.current;
     if (!start) return;
-    if (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8) clearTimer();
+    if (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8) {
+      moved.current = true;
+      clearTimer();
+    }
   };
 
   const onPointerUp = () => {
     const wasLong = longPressed.current;
-    clearTimer();
-    startRef.current = null;
-    if (!wasLong) onSelect();
+    const didMove = moved.current;
+    const hadStart = !!startRef.current;
+    resetGesture();
+    // 滑动关闭/列表滚动时手指会落到另一张卡片上，不能当成点击
+    if (hadStart && !wasLong && !didMove) onSelect();
   };
 
   const planProgress = plan.totalDays > 0 ? Math.round((plan.currentDay / plan.totalDays) * 100) : 0;
@@ -71,7 +84,7 @@ export default function PlanItem({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={clearTimer}
+      onPointerCancel={resetGesture}
       onContextMenu={(e) => {
         if (selectMode) return;
         e.preventDefault();
