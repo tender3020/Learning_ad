@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { motion, AnimatePresence } from "framer-motion";
 import MobileMenuDrawer from "@/components/layout/MobileMenuDrawer";
+import SwipeCloseSheet from "@/components/layout/SwipeCloseSheet";
 import Progress from "@/pages/Progress";
+import { useVisualViewportCss } from "@/hooks/useVisualViewportCss";
 import {
   LayoutDashboard,
   BarChart3,
@@ -11,7 +13,7 @@ import {
   LogOut,
   Sun,
   Menu,
-  X,
+  ChevronLeft,
 } from "lucide-react";
 
 const navItems = [
@@ -33,7 +35,10 @@ function isNavActive(pathname: string, itemPath: string) {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { logout } = useAuth();
+  useVisualViewportCss();
+  const isSettingsPage = location.pathname === "/settings";
 
   // 移动端全屏视图：none=路由页面, menu=左侧菜单, progress=右侧进度
   const [mobileView, setMobileView] = useState<"none" | "menu" | "progress">("none");
@@ -56,7 +61,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
 
   return (
-    <div className="h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--bg-primary)" }}>
+    <div className="h-dvh w-screen overflow-hidden" style={{ backgroundColor: "var(--bg-primary)" }}>
       <div className="hidden md:flex h-full w-full">
         <aside className="w-[220px] lg:w-[240px] liquid-glass border-r border-token-surface z-20 flex flex-col flex-shrink-0">
           <div className="flex items-center gap-2.5 px-4 py-4">
@@ -120,29 +125,55 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </div>
 
       <div className="md:hidden flex flex-col h-full w-full">
-        {/* 顶栏：左三条杠菜单，右进度 */}
         <div
-          className="app-mobile-topbar min-h-10 safe-area-pt backdrop-blur-xl border-b border-token-surface z-30 flex items-center justify-between px-2 flex-shrink-0"
+          className="app-mobile-topbar safe-area-pt backdrop-blur-xl border-b border-token-surface z-30 flex-shrink-0"
           style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 80%, transparent)" }}
         >
-          <button
-            type="button"
-            onClick={() => setMobileView(mobileView === "menu" ? "none" : "menu")}
-            aria-label={mobileView === "menu" ? "关闭菜单" : "打开菜单"}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-token-primary"
-          >
-            {mobileView === "menu" ? <X size={20} /> : <Menu size={20} />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileView(mobileView === "progress" ? "none" : "progress")}
-            aria-label="学习进度"
-            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
-              mobileView === "progress" ? "text-token-brand-light" : "text-token-primary"
-            }`}
-          >
-            <BarChart3 size={20} />
-          </button>
+          {isSettingsPage ? (
+            <div className="h-10 relative flex items-center px-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (location.key === "default") navigate("/today");
+                  else navigate(-1);
+                }}
+                aria-label="返回"
+                className="relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-token-primary"
+                style={{
+                  backgroundColor: "var(--surface-elevated)",
+                  border: "1px solid var(--surface-border-strong)",
+                }}
+              >
+                <ChevronLeft size={22} />
+              </button>
+              <h1 className="absolute inset-0 flex items-center justify-center text-[15px] font-medium text-token-primary pointer-events-none">
+                设置
+              </h1>
+            </div>
+          ) : (
+            <div className="h-10 flex items-center justify-between px-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (mobileView !== "menu") setMobileView("menu");
+                }}
+                aria-label="打开菜单"
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-token-primary"
+              >
+                <Menu size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (mobileView !== "progress") setMobileView("progress");
+                }}
+                aria-label="学习进度"
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-token-primary"
+              >
+                <BarChart3 size={20} />
+              </button>
+            </div>
+          )}
         </div>
 
         <main className="flex-1 overflow-y-auto min-w-0" style={{ WebkitOverflowScrolling: "touch" }}>
@@ -152,28 +183,19 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* 左侧菜单全屏视图（含用户信息 + 计划列表） */}
         <MobileMenuDrawer open={mobileView === "menu"} onClose={() => setMobileView("none")} />
 
-        {/* 进度全屏视图（右侧滑入） */}
-        <AnimatePresence>
-          {mobileView === "progress" && (
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed inset-0 z-20 md:hidden flex flex-col"
-              style={{ backgroundColor: "var(--bg-primary)" }}
-              role="dialog"
-              aria-modal="true"
-              aria-label="学习进度"
-            >
-              {/* 顶栏占位（顶栏在其上方，可点击关闭） */}
-              <div className="min-h-10 safe-area-pt flex-shrink-0" />
-              <div className="flex-1 overflow-y-auto min-h-0" style={{ WebkitOverflowScrolling: "touch" }}>
-                <Progress />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <SwipeCloseSheet
+          open={mobileView === "progress"}
+          onClose={() => setMobileView("none")}
+          closeSwipe="left"
+          aria-label="学习进度"
+          className="fixed inset-0 z-20 md:hidden flex flex-col"
+          style={{ backgroundColor: "var(--bg-primary)" }}
+        >
+          <div className="app-mobile-chrome-offset" aria-hidden />
+          <div className="flex-1 overflow-y-auto min-h-0" style={{ WebkitOverflowScrolling: "touch" }}>
+            <Progress />
+          </div>
+        </SwipeCloseSheet>
       </div>
     </div>
   );

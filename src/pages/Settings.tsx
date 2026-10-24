@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
-import { syncNativeStatusBarStyle } from "@/lib/nativeStatusBar";
+import { applyThemePref, THEME_LABELS, type ThemePref } from "@/lib/theme";
 import WireframeSphere from "@/components/3d/WireframeSphere";
 import UserAvatar, { readImageAsJpeg } from "@/components/UserAvatar";
 import { Switch } from "@/components/ui/switch";
@@ -19,6 +19,7 @@ import {
   Edit3,
   Moon,
   Sun,
+  Monitor,
   Smartphone,
   Mail,
   Clock,
@@ -32,34 +33,37 @@ import {
 interface LocalSettings {
   notifyStudyReminder: boolean;
   notifyNewContent: boolean;
-  theme: "dark" | "light";
+  theme: ThemePref;
 }
 
 function getLocalSettings(): LocalSettings {
-  try {
-    const raw = localStorage.getItem("yizhi_settings");
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return {
+  const fallback: LocalSettings = {
     notifyStudyReminder: true,
     notifyNewContent: true,
     theme: "dark",
   };
+  try {
+    const raw = localStorage.getItem("yizhi_settings");
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<LocalSettings>;
+    const theme: ThemePref =
+      parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system"
+        ? parsed.theme
+        : "dark";
+    return {
+      notifyStudyReminder: parsed.notifyStudyReminder ?? true,
+      notifyNewContent: parsed.notifyNewContent ?? true,
+      theme,
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 function saveLocalSettings(settings: LocalSettings) {
   localStorage.setItem("yizhi_settings", JSON.stringify(settings));
 }
 
-// 应用主题到 document
-function applyThemeToDocument(theme: "dark" | "light") {
-  if (theme === "light") {
-    document.documentElement.classList.add("theme-light");
-  } else {
-    document.documentElement.classList.remove("theme-light");
-  }
-  syncNativeStatusBarStyle(theme);
-}
 
 // 请求浏览器通知权限
 async function requestNotificationPermission(): Promise<boolean> {
@@ -156,11 +160,11 @@ export default function Settings() {
     });
   }, []);
 
-  const setTheme = useCallback((theme: "dark" | "light") => {
+  const setTheme = useCallback((theme: ThemePref) => {
     setSettings((prev) => {
       const next = { ...prev, theme };
       saveLocalSettings(next);
-      applyThemeToDocument(theme);
+      applyThemePref(theme);
       return next;
     });
   }, []);
@@ -203,10 +207,9 @@ export default function Settings() {
       </AnimatePresence>
 
       <div className="relative z-10 px-3 py-3 md:p-8 max-w-3xl mx-auto">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-8">
-          <h1 className="hidden md:block text-lg md:text-3xl font-semibold mb-1 md:mb-2" style={{ color: 'var(--text-primary)' }}>设置</h1>
-          <p className="hidden md:block text-xs md:text-sm" style={{ color: 'var(--text-secondary)' }}>管理你的账户和偏好设置</p>
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="hidden md:block mb-8">
+          <h1 className="text-lg md:text-3xl font-semibold mb-1 md:mb-2" style={{ color: 'var(--text-primary)' }}>设置</h1>
+          <p className="text-xs md:text-sm" style={{ color: 'var(--text-secondary)' }}>管理你的账户和偏好设置</p>
         </motion.div>
 
         {/* Profile Card */}
@@ -296,7 +299,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-medium" style={{ color: 'var(--text-primary)' }}>主题外观</p>
-                <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>{settings.theme === "dark" ? "深色模式" : "浅色模式"}</p>
+                <p className="type-caption md:text-xs" style={{ color: 'var(--text-secondary)' }}>{THEME_LABELS[settings.theme] || "深色模式"}</p>
               </div>
               <ChevronRight size={14} style={{ color: 'var(--text-secondary)' }} className="flex-shrink-0" />
             </button>
@@ -478,6 +481,19 @@ export default function Settings() {
                     <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>明亮的阅读体验</p>
                   </div>
                   {settings.theme === "light" && <Check size={18} className="text-[var(--brand-primary)]" />}
+                </button>
+                <button onClick={() => setTheme("system")}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                    settings.theme === "system" ? "bg-[rgba(var(--brand-rgb),0.1)] border-[rgba(var(--brand-rgb),0.3)]" : "border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.04)]"
+                  }`}>
+                  <div className="w-10 h-10 rounded-lg border flex items-center justify-center" style={{ backgroundColor: "var(--surface-elevated)", borderColor: "var(--surface-border-strong)" }}>
+                    <Monitor size={18} className="text-token-primary" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm" style={{ color: 'var(--text-primary)' }}>跟随系统</p>
+                    <p className="type-caption" style={{ color: 'var(--text-secondary)' }}>与手机深色/浅色外观保持一致</p>
+                  </div>
+                  {settings.theme === "system" && <Check size={18} className="text-[var(--brand-primary)]" />}
                 </button>
               </div>
             </ModalWrapper>

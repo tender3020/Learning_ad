@@ -6,6 +6,7 @@ import { useLearningStore } from "@/stores/useLearningStore";
 import { aiService } from "@/services/aiService";
 import { useTtsPlayer } from "@/hooks/useTtsPlayer";
 import { useReadingPrefs } from "@/hooks/useReadingPrefs";
+import { setNativeStatusBarVisible } from "@/lib/nativeStatusBar";
 import { useReadingScrollPersistence } from "@/hooks/useReadingScrollPersistence";
 import TtsButton from "@/components/TtsButton";
 import TodayHeader, { type TodayContentState } from "@/components/today/TodayHeader";
@@ -464,7 +465,18 @@ export default function Study() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("reading-immersive", immersive);
-    return () => document.documentElement.classList.remove("reading-immersive");
+    setNativeStatusBarVisible(!immersive);
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        setNativeStatusBarVisible(!immersive);
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      document.documentElement.classList.remove("reading-immersive");
+      setNativeStatusBarVisible(true);
+    };
   }, [immersive]);
 
   useEffect(() => {
@@ -855,7 +867,7 @@ export default function Study() {
               animate={{ opacity: 1, backdropFilter: "blur(18px)" }}
               exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
               transition={{ duration: 0.32 }}
-              className="lg:hidden fixed inset-0 z-40"
+              className="lg:hidden app-vv-fill z-40"
               style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 42%, transparent)" }}
               aria-hidden
             />
@@ -864,7 +876,7 @@ export default function Study() {
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: 16, filter: "blur(8px)" }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-              className="lg:hidden fixed inset-0 z-50 flex flex-col"
+              className="lg:hidden app-vv-fill z-50 flex flex-col"
               style={{ backgroundColor: "var(--bg-primary)" }}
             >
               <div className="safe-area-pt flex items-center gap-1 px-2 py-2 border-b border-token-surface flex-shrink-0">

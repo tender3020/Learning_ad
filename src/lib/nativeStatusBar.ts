@@ -7,6 +7,8 @@
 
 type NativeStatusBarPlugin = {
   setStyle(options: { style: "DARK" | "LIGHT" }): Promise<void>;
+  hide(): Promise<void>;
+  show(): Promise<void>;
 };
 
 declare global {
@@ -19,12 +21,27 @@ declare global {
   }
 }
 
-export function syncNativeStatusBarStyle(theme: "dark" | "light") {
+function getStatusBar(): NativeStatusBarPlugin | undefined {
   try {
-    const statusBar = window.Capacitor?.Plugins?.StatusBar;
-    if (!statusBar) return;
-    void statusBar.setStyle({ style: theme === "light" ? "LIGHT" : "DARK" });
+    return window.Capacitor?.Plugins?.StatusBar;
   } catch {
-    // 非 App 环境或插件不可用，忽略
+    return undefined;
+  }
+}
+
+export function syncNativeStatusBarStyle(theme: "dark" | "light") {
+  const statusBar = getStatusBar();
+  if (!statusBar) return;
+  void statusBar.setStyle({ style: theme === "light" ? "LIGHT" : "DARK" });
+}
+
+/** 沉浸式阅读时隐藏系统状态栏（时间/电量）；退出后恢复。浏览器环境静默跳过。 */
+export function setNativeStatusBarVisible(visible: boolean) {
+  const statusBar = getStatusBar();
+  if (!statusBar) return;
+  if (visible) {
+    void statusBar.show();
+  } else {
+    void statusBar.hide();
   }
 }

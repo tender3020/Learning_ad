@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
+import { useThemeSync } from "@/lib/theme";
 import AppLayout from "@/components/layout/AppLayout";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -52,6 +53,7 @@ function LoginRouteGuard() {
 }
 
 export default function App() {
+  useThemeSync();
   return (
     <Routes>
       <Route path="/login" element={<LoginRouteGuard />} />
