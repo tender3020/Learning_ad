@@ -252,7 +252,6 @@ export default function Dashboard({ embedded, onPlanActivated }: DashboardProps 
           >
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="min-w-0 flex-1">
-                <p className="type-caption text-token-brand mb-1">当前计划</p>
                 <h2 className="text-sm md:text-lg font-semibold text-token-primary truncate">{store.goal || "学习计划"}</h2>
                 <p className="type-caption text-token-secondary mt-1">
                   第 {store.currentDay}/{store.totalDays} 天 · {progress}%

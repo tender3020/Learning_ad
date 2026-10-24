@@ -186,9 +186,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <SwipeCloseSheet
           open={mobileView === "progress"}
           onClose={() => setMobileView("none")}
-          closeSwipe="left"
+          side="right"
           aria-label="学习进度"
-          className="fixed inset-0 z-20 md:hidden flex flex-col"
+          className="fixed inset-0 z-[25] md:hidden flex flex-col"
           style={{ backgroundColor: "var(--bg-primary)" }}
         >
           <div className="app-mobile-chrome-offset" aria-hidden />

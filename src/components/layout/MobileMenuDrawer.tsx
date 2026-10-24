@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { ChevronRight, SquarePen } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import UserAvatar from "@/components/UserAvatar";
 import Dashboard from "@/pages/Dashboard";
@@ -11,7 +11,7 @@ type MobileMenuDrawerProps = {
   onClose: () => void;
 };
 
-/** 移动端全屏菜单：头像/新建 + 完整计划管理（右滑返回） */
+/** 移动端全屏菜单：头像/新建 + 完整计划管理（从左滑入，左滑返回） */
 export default function MobileMenuDrawer({ open, onClose }: MobileMenuDrawerProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,9 +46,9 @@ export default function MobileMenuDrawer({ open, onClose }: MobileMenuDrawerProp
     <SwipeCloseSheet
       open={open}
       onClose={onClose}
-      closeSwipe="right"
+      side="left"
       aria-label="菜单"
-      className="fixed inset-0 z-20 md:hidden flex flex-col"
+      className="fixed inset-0 z-[25] md:hidden flex flex-col"
       style={{ backgroundColor: "var(--bg-primary)" }}
     >
       <div className="app-mobile-chrome-offset" aria-hidden />
@@ -61,11 +61,7 @@ export default function MobileMenuDrawer({ open, onClose }: MobileMenuDrawerProp
             className="w-11 h-11"
             textClassName="text-base"
           />
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold text-token-primary truncate">{displayName}</p>
-            <p className="type-caption text-token-secondary">账户与设置</p>
-          </div>
-          <ChevronRight size={16} className="text-token-secondary flex-shrink-0" />
+          <p className="text-base font-semibold text-token-primary truncate min-w-0 flex-1">{displayName}</p>
         </button>
         <button
           type="button"
@@ -73,7 +69,7 @@ export default function MobileMenuDrawer({ open, onClose }: MobileMenuDrawerProp
           aria-label="新建学习计划"
           className="w-10 h-10 rounded-xl flex items-center justify-center text-token-primary hover-surface flex-shrink-0"
         >
-          <SquarePen size={20} />
+          <Plus size={22} />
         </button>
       </div>
 
