@@ -7,8 +7,7 @@ import { getDb } from "./queries/connection";
 import { users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { findUserById } from "./queries/phone-users";
-
-const AVATAR_DIR = path.resolve(import.meta.dirname, "../data/uploads/avatars");
+import { AVATAR_DIR, isFsPermissionError } from "./lib/uploads";
 
 async function removeOldAvatar(avatarUrl: string | null | undefined) {
   if (!avatarUrl?.startsWith("/uploads/avatars/")) return;
@@ -75,17 +74,29 @@ export const userRouter = createRouter({
         throw new TRPCError({ code: "BAD_REQUEST", message: "图片大小不合适" });
       }
 
-      await fs.mkdir(AVATAR_DIR, { recursive: true });
-      const filename = `${ctx.user.id}-${Date.now()}.jpg`;
-      await fs.writeFile(path.join(AVATAR_DIR, filename), buffer);
+      try {
+        await fs.mkdir(AVATAR_DIR, { recursive: true });
+        const filename = `${ctx.user.id}-${Date.now()}.jpg`;
+        await fs.writeFile(path.join(AVATAR_DIR, filename), buffer);
 
-      const current = await findUserById(ctx.user.id);
-      await removeOldAvatar(current?.avatar);
+        const current = await findUserById(ctx.user.id);
+        await removeOldAvatar(current?.avatar);
 
-      const avatar = `/uploads/avatars/${filename}`;
-      const db = getDb();
-      await db.update(users).set({ avatar }).where(eq(users.id, ctx.user.id));
+        const avatar = `/uploads/avatars/${filename}`;
+        const db = getDb();
+        await db.update(users).set({ avatar }).where(eq(users.id, ctx.user.id));
 
-      return { success: true, avatar };
+        return { success: true, avatar };
+      } catch (error) {
+        if (isFsPermissionError(error)) {
+          console.error("[updateAvatar] 无法写入头像目录", AVATAR_DIR, error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "头像保存失败，请稍后重试",
+          });
+        }
+        throw error;
+      }
+
     }),
 });

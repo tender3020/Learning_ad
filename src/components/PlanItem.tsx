@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Play, BookOpen, CheckCircle2, Pin, Check } from "lucide-react";
 import { TYPE_LABELS } from "@shared/typeEngine";
+import { setNativeTextMenuEnabled } from "@/lib/nativeTextMenu";
 
 interface PlanItemProps {
   plan: {
@@ -13,7 +14,7 @@ interface PlanItemProps {
   };
   isCurrent: boolean;
   onSelect: () => void;
-  onLongPress: () => void;
+  onLongPress: (pos: { x: number; y: number }) => void;
   isPinned?: boolean;
   selectMode?: boolean;
   selected?: boolean;
@@ -47,14 +48,21 @@ export default function PlanItem({
     moved.current = false;
   };
 
+  const fireLongPress = (x: number, y: number) => {
+    longPressed.current = true;
+    setNativeTextMenuEnabled(false);
+    onLongPress({ x, y });
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     longPressed.current = false;
     moved.current = false;
     startRef.current = { x: e.clientX, y: e.clientY };
     if (selectMode) return;
+    setNativeTextMenuEnabled(false);
     timerRef.current = window.setTimeout(() => {
-      longPressed.current = true;
-      onLongPress();
+      const start = startRef.current;
+      fireLongPress(start?.x ?? e.clientX, start?.y ?? e.clientY);
     }, 480);
   };
 
@@ -72,6 +80,7 @@ export default function PlanItem({
     const didMove = moved.current;
     const hadStart = !!startRef.current;
     resetGesture();
+    if (!wasLong) setNativeTextMenuEnabled(true);
     // 滑动关闭/列表滚动时手指会落到另一张卡片上，不能当成点击
     if (hadStart && !wasLong && !didMove) onSelect();
   };
@@ -84,13 +93,18 @@ export default function PlanItem({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={resetGesture}
-      onContextMenu={(e) => {
-        if (selectMode) return;
-        e.preventDefault();
-        onLongPress();
+      onPointerCancel={() => {
+        const wasLong = longPressed.current;
+        resetGesture();
+        if (!wasLong) setNativeTextMenuEnabled(true);
       }}
-      className={`w-full text-left liquid-glass rounded-xl p-3 md:p-4 transition-all select-none ${
+      onContextMenu={(e) => {
+        e.preventDefault();
+        if (selectMode) return;
+        fireLongPress(e.clientX, e.clientY);
+      }}
+      onSelectStart={(e) => e.preventDefault()}
+      className={`plan-item-card w-full text-left liquid-glass rounded-xl p-3 md:p-4 transition-all select-none ${
         isCurrent
           ? "border border-[color-mix(in_srgb,var(--brand-primary)_35%,transparent)]"
           : "border border-transparent hover:border-token-surface"

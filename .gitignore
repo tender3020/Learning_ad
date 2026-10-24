@@ -39,7 +39,8 @@ dist/
 build/
 # Generated learning illustrations (persist on server, do not commit)
 data/uploads/content-images/
-data/uploads/avatars/
+data/uploads/avatars/*
+!data/uploads/avatars/.gitkeep
 # Test coverage
 coverage/
 .nyc_output/

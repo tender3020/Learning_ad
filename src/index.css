@@ -1157,6 +1157,14 @@ html.reading-immersive .reading-article {
   pointer-events: none;
 }
 
+/* 计划卡片长按不要触发系统文本选中 */
+.plan-item-card,
+.plan-item-card * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none;
+}
+
 /* 贴在可见视口上，键盘弹出时不会被顶进状态栏 */
 .app-vv-fill {
   position: fixed;

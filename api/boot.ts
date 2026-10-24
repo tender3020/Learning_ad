@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { HttpBindings } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import path from "path";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { z } from "zod";
 import { appRouter } from "./router";
@@ -19,10 +18,11 @@ import {
 import { getDb } from "./queries/connection";
 import { synthesizeSentence } from "./lib/volcengine-tts";
 import { recordQAMastery } from "./services/masteryService";
+import { DATA_ROOT, ensureUploadDirs } from "./lib/uploads";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
-const dataRoot = path.resolve(import.meta.dirname, "../data");
+const dataRoot = DATA_ROOT;
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
@@ -246,6 +246,11 @@ export default app;
 if (env.isProduction) {
   const { serve } = await import("@hono/node-server");
   const port = parseInt(process.env.PORT || "3000");
+  try {
+    await ensureUploadDirs();
+  } catch (error) {
+    console.error("[boot] 无法创建上传目录，头像/配图写入会失败：", dataRoot, error);
+  }
   serve({ fetch: app.fetch, port }, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });

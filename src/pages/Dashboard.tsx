@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
+import { setNativeTextMenuEnabled } from "@/lib/nativeTextMenu";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { useLearningStore } from "@/stores/useLearningStore";
@@ -50,6 +52,85 @@ function sortByPin<T extends { id: number }>(list: T[], pinned: number[]): T[] {
   });
 }
 
+type PlanActionMenuProps = {
+  x: number;
+  y: number;
+  pinned: boolean;
+  onClose: () => void;
+  onMultiSelect: () => void;
+  onTogglePin: () => void;
+  onDelete: () => void;
+};
+
+function PlanActionMenu({ x, y, pinned, onClose, onMultiSelect, onTogglePin, onDelete }: PlanActionMenuProps) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: x, top: y + 8, ready: false });
+
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pad = 12;
+    let left = x;
+    let top = y + 10;
+    if (left + rect.width > window.innerWidth - pad) left = window.innerWidth - rect.width - pad;
+    if (left < pad) left = pad;
+    if (top + rect.height > window.innerHeight - pad) top = y - rect.height - 10;
+    if (top < pad) top = pad;
+    setPos({ left, top, ready: true });
+  }, [x, y]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[80]"
+      style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 28%, transparent)" }}
+      onClick={onClose}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <motion.div
+        ref={boxRef}
+        initial={{ scale: 0.94, opacity: 0 }}
+        animate={{ scale: 1, opacity: pos.ready ? 1 : 0 }}
+        exit={{ scale: 0.96, opacity: 0 }}
+        className="absolute w-[min(240px,calc(100vw-24px))] rounded-2xl overflow-hidden"
+        style={{
+          left: pos.left,
+          top: pos.top,
+          backgroundColor: "var(--surface-elevated)",
+          boxShadow: "0 12px 40px color-mix(in srgb, var(--text-primary) 18%, transparent)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-token-primary hover-surface"
+          onClick={onMultiSelect}
+        >
+          <Check size={16} /> 多选
+        </button>
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-token-primary hover-surface"
+          onClick={onTogglePin}
+        >
+          <Pin size={16} /> {pinned ? "取消置顶" : "置顶"}
+        </button>
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 px-4 py-3.5 text-sm hover-surface"
+          style={{ color: "var(--color-danger)" }}
+          onClick={onDelete}
+        >
+          <Trash2 size={16} /> 删除
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 type DashboardProps = {
   embedded?: boolean;
   onPlanActivated?: () => void;
@@ -73,7 +154,7 @@ export default function Dashboard({ embedded, onPlanActivated }: DashboardProps 
   const [pinnedIds, setPinnedIds] = useState<number[]>(() => (userId ? loadPinned(userId) : []));
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [menuPlanId, setMenuPlanId] = useState<number | null>(null);
+  const [menu, setMenu] = useState<{ planId: number; x: number; y: number } | null>(null);
 
   const deletePlan = trpc.learning.deletePlan.useMutation({
     onSuccess: (_data, vars) => {
@@ -110,7 +191,12 @@ export default function Dashboard({ embedded, onPlanActivated }: DashboardProps 
   const activeCount = activePlans.length;
   const canCreateNew = activeCount < 7;
   const progress = store.totalDays > 0 ? Math.round((store.currentDay / store.totalDays) * 100) : 0;
-  const menuPlan = plans?.find((p) => p.id === menuPlanId) || null;
+  const menuPlan = plans?.find((p) => p.id === menu?.planId) || null;
+
+  const closePlanMenu = () => {
+    setMenu(null);
+    setNativeTextMenuEnabled(true);
+  };
 
   const togglePin = (planId: number) => {
     if (!userId) return;
@@ -334,7 +420,7 @@ export default function Dashboard({ embedded, onPlanActivated }: DashboardProps 
                   selectMode={selectMode}
                   selected={selectedIds.has(plan.id)}
                   onSelect={() => switchToPlan(plan)}
-                  onLongPress={() => setMenuPlanId(plan.id)}
+                  onLongPress={(pos) => setMenu({ planId: plan.id, ...pos })}
                 />
               ))
             ) : (
@@ -358,7 +444,7 @@ export default function Dashboard({ embedded, onPlanActivated }: DashboardProps 
                   selectMode={selectMode}
                   selected={selectedIds.has(plan.id)}
                   onSelect={() => switchToPlan(plan)}
-                  onLongPress={() => setMenuPlanId(plan.id)}
+                  onLongPress={(pos) => setMenu({ planId: plan.id, ...pos })}
                 />
               ))
             ) : (
@@ -403,63 +489,33 @@ export default function Dashboard({ embedded, onPlanActivated }: DashboardProps 
           )}
         </div>
 
-        <AnimatePresence>
-          {menuPlan && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[60] flex items-start justify-center px-8 pt-36"
-              style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 35%, transparent)" }}
-              onClick={() => setMenuPlanId(null)}
-            >
-              <motion.div
-                initial={{ scale: 0.94, opacity: 0, y: -8 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.96, opacity: 0 }}
-                className="w-full max-w-[240px] rounded-2xl overflow-hidden"
-                style={{
-                  backgroundColor: "var(--surface-elevated)",
-                  boxShadow: "0 12px 40px color-mix(in srgb, var(--text-primary) 18%, transparent)",
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-token-primary hover-surface"
-                  onClick={() => {
+        {typeof document !== "undefined" &&
+          createPortal(
+            <AnimatePresence>
+              {menu && menuPlan && (
+                <PlanActionMenu
+                  x={menu.x}
+                  y={menu.y}
+                  pinned={pinnedIds.includes(menuPlan.id)}
+                  onClose={closePlanMenu}
+                  onMultiSelect={() => {
                     setSelectedIds(new Set([menuPlan.id]));
                     setSelectMode(true);
-                    setMenuPlanId(null);
+                    closePlanMenu();
                   }}
-                >
-                  <Check size={16} /> 多选
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-token-primary hover-surface"
-                  onClick={() => {
+                  onTogglePin={() => {
                     togglePin(menuPlan.id);
-                    setMenuPlanId(null);
+                    closePlanMenu();
                   }}
-                >
-                  <Pin size={16} /> {pinnedIds.includes(menuPlan.id) ? "取消置顶" : "置顶"}
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-sm hover-surface"
-                  style={{ color: "var(--color-danger)" }}
-                  onClick={() => {
+                  onDelete={() => {
                     setDeleteTarget(menuPlan.id);
-                    setMenuPlanId(null);
+                    closePlanMenu();
                   }}
-                >
-                  <Trash2 size={16} /> 删除
-                </button>
-              </motion.div>
-            </motion.div>
+                />
+              )}
+            </AnimatePresence>,
+            document.body,
           )}
-        </AnimatePresence>
 
         <AnimatePresence>
           {deleteTarget !== null && (

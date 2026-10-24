@@ -127,7 +127,7 @@ export default function Settings() {
     },
     onError: (err) => {
       setUploadingAvatar(false);
-      setAvatarError(err.message || "头像上传失败");
+      setAvatarError(/EACCES|EPERM|permission denied/i.test(err.message) ? "头像保存失败，请稍后重试" : (err.message || "头像上传失败"));
     },
   });
 
