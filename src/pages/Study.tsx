@@ -489,12 +489,14 @@ export default function Study() {
   const isReadingChromeTarget = (el: EventTarget | null) => {
     if (!(el instanceof Element)) return true;
     return Boolean(
-      el.closest("a, button, input, textarea, select, label, [role='button'], .reading-quiz, .reading-quiz-wrap, .reading-footer, .reading-settings-sheet"),
+      el.closest(
+        "a, button, input, textarea, select, label, [role='button'], .reading-quiz, .reading-quiz-wrap, .reading-footer, .reading-settings-sheet, .mermaid-lightbox, .mermaid-diagram",
+      ),
     );
   };
 
   const handleReadingPointerDown = (e: React.PointerEvent) => {
-    if (isReadingChromeTarget(e.target)) {
+    if (document.querySelector(".mermaid-lightbox") || isReadingChromeTarget(e.target)) {
       tapStartRef.current = null;
       return;
     }
@@ -504,7 +506,7 @@ export default function Study() {
   const handleReadingPointerUp = (e: React.PointerEvent) => {
     const start = tapStartRef.current;
     tapStartRef.current = null;
-    if (!start || isReadingChromeTarget(e.target)) return;
+    if (document.querySelector(".mermaid-lightbox") || !start || isReadingChromeTarget(e.target)) return;
     if (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8) return;
     if (showReadingSettings) {
       setShowReadingSettings(false);

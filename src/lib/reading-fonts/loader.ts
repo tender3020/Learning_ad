@@ -127,13 +127,19 @@ export async function ensureReadingFont(id: ReadingFontId) {
   }
 
   await once(id, async () => {
+    if (spec.webFamily && spec.urls?.length) {
+      try {
+        await registerFace(spec.webFamily, spec.urls);
+        return;
+      } catch {
+        /* 本地 woff2 没有时走 stylesheet / 抛给调用方 */
+      }
+    }
     if (spec.stylesheet) {
       await injectStylesheet(spec.stylesheet);
       await document.fonts.ready;
       return;
     }
-    if (spec.webFamily && spec.urls?.length) {
-      await registerFace(spec.webFamily, spec.urls);
-    }
+    throw new Error("字体下载失败");
   });
 }

@@ -126,13 +126,33 @@ function fitSvgToStage(svg: SVGSVGElement, availW: number, availH: number) {
   svg.style.height = `${size.h * scale}px`;
 }
 
+function swallowGhostTap() {
+  const stop = (event: Event) => {
+    event.stopPropagation();
+    event.preventDefault();
+  };
+  document.addEventListener("pointerup", stop, true);
+  document.addEventListener("click", stop, true);
+  window.setTimeout(() => {
+    document.removeEventListener("pointerup", stop, true);
+    document.removeEventListener("click", stop, true);
+  }, 400);
+}
+
 function MermaidLightbox({ svgHtml, onClose }: { svgHtml: string; onClose: () => void }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
+  const close = () => {
+    swallowGhostTap();
+    onClose();
+  };
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      swallowGhostTap();
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     const html = document.documentElement;
@@ -168,24 +188,26 @@ function MermaidLightbox({ svgHtml, onClose }: { svgHtml: string; onClose: () =>
     return () => observer.disconnect();
   }, [svgHtml]);
 
-  return (
+    return (
     <div
       className="mermaid-lightbox"
       role="dialog"
       aria-modal="true"
-      aria-label="流程图"
-      onClick={onClose}
+      aria-label="流程图，点按关闭"
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerUp={(event) => {
+        event.stopPropagation();
+        close();
+      }}
+      onClick={(event) => event.stopPropagation()}
     >
-      <div ref={stageRef} className="mermaid-lightbox__stage" onClick={(event) => event.stopPropagation()}>
+      <div ref={stageRef} className="mermaid-lightbox__stage">
         <div
           ref={canvasRef}
           className="mermaid-lightbox__canvas"
           dangerouslySetInnerHTML={{ __html: svgHtml }}
         />
       </div>
-      <button type="button" className="mermaid-lightbox__close" onClick={onClose}>
-        关闭
-      </button>
     </div>
   );
 }

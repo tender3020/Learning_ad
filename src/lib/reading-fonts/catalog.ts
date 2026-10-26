@@ -1,6 +1,12 @@
 /**
- * 阅读字体唯一清单。加字体只在这里追加一项：
- * 按钮、正文、下载、系统字体探测都从这份配置派生。
+ * 阅读字体唯一清单。服务器不用安装系统字体。
+ *
+ * 加一种字体（三步，缺一不可）：
+ * 1. 下面追加一项（id / label / webFamily / urls）
+ * 2. 把对应 woff2 放到 public/fonts/（或补进 scripts/fetch-reading-fonts.mjs）
+ * 3. 本地 npm run build，把整个 dist（含 dist/public/fonts）上传到服务器
+ *
+ * 只把 woff2 丢进服务器 fonts 目录不会出现新按钮，按钮名单在这份 catalog 里。
  */
 type FontSpecBase = {
   label: string;
@@ -24,8 +30,33 @@ export const READING_FONT_CATALOG = {
     useRoman: false,
     systemFamilies: [],
   },
-  song: {
+  songti: {
     label: "宋体",
+    generic: "serif",
+    useRoman: true,
+    systemFamilies: [],
+    webFamily: "LXGW Neo ZhiSong CHS",
+    stylesheet:
+      "https://cdn.jsdelivr.net/npm/cn-fontsource-lxgw-neo-zhi-song-chs-regular-lxgw-neo-zhi-song@1.0.0/font.css",
+  },
+  heiti: {
+    label: "黑体",
+    generic: "sans-serif",
+    useRoman: true,
+    systemFamilies: [],
+    webFamily: "LXGW Neo XiHei",
+    stylesheet: "https://cdn.jsdelivr.net/npm/cn-fontsource-lxgw-neo-xi-hei-regular@1.0.1/font.css",
+  },
+  zhengkai: {
+    label: "正楷",
+    generic: "serif",
+    useRoman: true,
+    systemFamilies: [],
+    webFamily: "LXGW WenKai Screen",
+    stylesheet: "https://cdn.jsdelivr.net/npm/cn-fontsource-lxgw-wen-kai-screen@1.0.6/font.css",
+  },
+  song: {
+    label: "思源宋体",
     generic: "serif",
     useRoman: true,
     systemFamilies: ["SimSun", "宋体", "Songti SC", "STSong", "NSimSun"],
@@ -36,7 +67,7 @@ export const READING_FONT_CATALOG = {
     ],
   },
   hei: {
-    label: "黑体",
+    label: "思源黑体",
     generic: "sans-serif",
     useRoman: true,
     systemFamilies: ["Microsoft YaHei", "微软雅黑", "PingFang SC", "Heiti SC", "Source Han Sans SC"],
@@ -47,15 +78,16 @@ export const READING_FONT_CATALOG = {
     ],
   },
   kai: {
-    label: "楷体",
+    label: "霞鹜文楷",
     generic: "serif",
     useRoman: true,
     systemFamilies: ["KaiTi", "楷体", "STKaiti", "Kaiti SC", "KaiTi_GB2312"],
     webFamily: "LXGW WenKai Lite",
+    urls: ["/fonts/kai.woff2"],
     stylesheet: "https://cdn.jsdelivr.net/npm/lxgw-wenkai-lite-webfont@1.1.0/lxgwwenkailite-regular.css",
   },
   yuan: {
-    label: "圆体",
+    label: "站酷小薇",
     generic: "sans-serif",
     useRoman: true,
     systemFamilies: ["YouYuan", "幼圆", "STYuanti", "Yuanti SC"],
@@ -63,6 +95,50 @@ export const READING_FONT_CATALOG = {
     urls: [
       "/fonts/yuan.woff2",
       "https://cdn.jsdelivr.net/npm/@fontsource/zcool-xiaowei@5.2.5/files/zcool-xiaowei-chinese-simplified-400-normal.woff2",
+    ],
+  },
+  huangyou: {
+    label: "黄油体",
+    generic: "sans-serif",
+    useRoman: true,
+    systemFamilies: [],
+    webFamily: "Yizhi Huangyou",
+    urls: [
+      "/fonts/huangyou.woff2",
+      "https://cdn.jsdelivr.net/npm/@fontsource/zcool-qingke-huangyou@5.2.5/files/zcool-qingke-huangyou-chinese-simplified-400-normal.woff2",
+    ],
+  },
+  kuaile: {
+    label: "快乐体",
+    generic: "sans-serif",
+    useRoman: true,
+    systemFamilies: [],
+    webFamily: "Yizhi Kuaile",
+    urls: [
+      "/fonts/kuaile.woff2",
+      "https://cdn.jsdelivr.net/npm/@fontsource/zcool-kuaile@5.2.5/files/zcool-kuaile-chinese-simplified-400-normal.woff2",
+    ],
+  },
+  mashan: {
+    label: "马善政楷",
+    generic: "serif",
+    useRoman: true,
+    systemFamilies: [],
+    webFamily: "Yizhi Mashan",
+    urls: [
+      "/fonts/mashan.woff2",
+      "https://cdn.jsdelivr.net/npm/@fontsource/ma-shan-zheng@5.2.5/files/ma-shan-zheng-chinese-simplified-400-normal.woff2",
+    ],
+  },
+  longcang: {
+    label: "龙藏体",
+    generic: "serif",
+    useRoman: true,
+    systemFamilies: [],
+    webFamily: "Yizhi Longcang",
+    urls: [
+      "/fonts/longcang.woff2",
+      "https://cdn.jsdelivr.net/npm/@fontsource/long-cang@5.2.5/files/long-cang-chinese-simplified-400-normal.woff2",
     ],
   },
 } as const satisfies Record<string, FontSpecBase>;

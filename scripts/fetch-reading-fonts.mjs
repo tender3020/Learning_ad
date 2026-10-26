@@ -26,6 +26,22 @@ const FILES = [
     name: "roman.woff2",
     url: "https://cdn.jsdelivr.net/npm/@fontsource/tinos@5.2.5/files/tinos-latin-400-normal.woff2",
   },
+  {
+    name: "huangyou.woff2",
+    url: "https://cdn.jsdelivr.net/npm/@fontsource/zcool-qingke-huangyou@5.2.5/files/zcool-qingke-huangyou-chinese-simplified-400-normal.woff2",
+  },
+  {
+    name: "kuaile.woff2",
+    url: "https://cdn.jsdelivr.net/npm/@fontsource/zcool-kuaile@5.2.5/files/zcool-kuaile-chinese-simplified-400-normal.woff2",
+  },
+  {
+    name: "mashan.woff2",
+    url: "https://cdn.jsdelivr.net/npm/@fontsource/ma-shan-zheng@5.2.5/files/ma-shan-zheng-chinese-simplified-400-normal.woff2",
+  },
+  {
+    name: "longcang.woff2",
+    url: "https://cdn.jsdelivr.net/npm/@fontsource/long-cang@5.2.5/files/long-cang-chinese-simplified-400-normal.woff2",
+  },
 ];
 
 async function download(url, dest) {
