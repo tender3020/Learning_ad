@@ -40,7 +40,7 @@ function getLocalSettings(): LocalSettings {
   const fallback: LocalSettings = {
     notifyStudyReminder: true,
     notifyNewContent: true,
-    theme: "dark",
+    theme: "system",
   };
   try {
     const raw = localStorage.getItem("yizhi_settings");
@@ -49,7 +49,7 @@ function getLocalSettings(): LocalSettings {
     const theme: ThemePref =
       parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system"
         ? parsed.theme
-        : "dark";
+        : "system";
     return {
       notifyStudyReminder: parsed.notifyStudyReminder ?? true,
       notifyNewContent: parsed.notifyNewContent ?? true,

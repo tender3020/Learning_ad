@@ -1,5 +1,6 @@
-import { memo, type RefObject } from "react";
-import type { ReadingFontFamily, ReadingFontSize, ReadingLineHeight, ReadingMode } from "@/hooks/useReadingPrefs";
+import { memo, type CSSProperties, type RefObject } from "react";
+import type { ReadingFontSize, ReadingLineHeight, ReadingMode } from "@/hooks/useReadingPrefs";
+import { readingFontStack, type ReadingFontFamily } from "@/lib/reading-fonts";
 
 type ReadingShellProps = {
   mode: ReadingMode;
@@ -32,14 +33,6 @@ const LINE_HEIGHT_CLASS: Record<ReadingLineHeight, string> = {
   relaxed: "reading-leading-relaxed",
 };
 
-const FAMILY_CLASS: Record<ReadingFontFamily, string> = {
-  system: "reading-font-system",
-  song: "reading-font-song",
-  hei: "reading-font-hei",
-  kai: "reading-font-kai",
-  yuan: "reading-font-yuan",
-};
-
 function ReadingShell({
   mode,
   fontSize,
@@ -50,9 +43,14 @@ function ReadingShell({
   onDismissBreak,
   children,
 }: ReadingShellProps) {
+  const style = {
+    "--reading-font-family": readingFontStack(fontFamily),
+  } as CSSProperties;
+
   return (
     <div
-      className={`reading-shell ${MODE_CLASS[mode]} ${FONT_CLASS[fontSize]} ${LINE_HEIGHT_CLASS[lineHeight]} ${FAMILY_CLASS[fontFamily]}`}
+      className={`reading-shell ${MODE_CLASS[mode]} ${FONT_CLASS[fontSize]} ${LINE_HEIGHT_CLASS[lineHeight]}`}
+      style={style}
     >
       <div className="reading-progress" aria-hidden="true">
         <div ref={progressBarRef} className="reading-progress__bar" style={{ width: "0%" }} />

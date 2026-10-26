@@ -42,7 +42,7 @@ export function readThemePref(): ThemePref {
   } catch {
     // ignore
   }
-  return "dark";
+  return "system";
 }
 
 /** 启动时应用主题，并在系统外观变化时同步（仅「跟随系统」） */

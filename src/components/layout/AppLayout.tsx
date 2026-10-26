@@ -126,7 +126,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
       <div className="md:hidden flex flex-col h-full w-full">
         <div
-          className="app-mobile-topbar safe-area-pt backdrop-blur-xl border-b border-token-surface z-30 flex-shrink-0"
+          className="app-mobile-topbar relative safe-area-pt backdrop-blur-xl border-b border-token-surface z-40 flex-shrink-0"
           style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 80%, transparent)" }}
         >
           {isSettingsPage ? (
@@ -154,21 +154,19 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <div className="h-10 flex items-center justify-between px-2">
               <button
                 type="button"
-                onClick={() => {
-                  if (mobileView !== "menu") setMobileView("menu");
-                }}
-                aria-label="打开菜单"
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-token-primary"
+                onClick={() => setMobileView((view) => (view === "menu" ? "none" : "menu"))}
+                aria-label={mobileView === "menu" ? "关闭菜单" : "打开菜单"}
+                aria-expanded={mobileView === "menu"}
+                className="relative z-10 w-9 h-9 rounded-lg flex items-center justify-center text-token-primary"
               >
                 <Menu size={20} />
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (mobileView !== "progress") setMobileView("progress");
-                }}
-                aria-label="学习进度"
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-token-primary"
+                onClick={() => setMobileView((view) => (view === "progress" ? "none" : "progress"))}
+                aria-label={mobileView === "progress" ? "关闭进度" : "学习进度"}
+                aria-expanded={mobileView === "progress"}
+                className="relative z-10 w-9 h-9 rounded-lg flex items-center justify-center text-token-primary"
               >
                 <BarChart3 size={20} />
               </button>

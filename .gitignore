@@ -44,6 +44,8 @@ data/uploads/avatars/*
 # Test coverage
 coverage/
 .nyc_output/
+# 阅读字体由 npm run fonts:fetch / build 下载，不进仓库
+public/fonts/*.woff2
 # Android build outputs
 android/.gradle/
 android/app/build/

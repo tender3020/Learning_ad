@@ -49,7 +49,7 @@ export default function Study() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const readingSessionStartRef = useRef<number | null>(null);
   const tts = useTtsPlayer();
-  const { prefs: readingPrefs, setPrefs: setReadingPrefs } = useReadingPrefs();
+  const { prefs: readingPrefs, setPrefs: setReadingPrefs, setFontFamily, fontLoading } = useReadingPrefs();
   const [showReadingSettings, setShowReadingSettings] = useState(false);
   const [immersive, setImmersive] = useState(false);
   const tapStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -831,6 +831,8 @@ export default function Study() {
           fontFamily={readingPrefs.fontFamily}
           focusMode={readingPrefs.focusMode}
           onChange={setReadingPrefs}
+          onFontFamilyChange={setFontFamily}
+          fontLoading={fontLoading}
         />
 
         {/* ===== 移动端常驻提问条：点击后模糊过渡到独立问答页 ===== */}

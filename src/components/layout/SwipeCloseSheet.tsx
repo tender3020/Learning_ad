@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, useMotionValue, animate } from "framer-motion";
 
 type SwipeCloseSheetProps = {
@@ -38,20 +38,66 @@ export default function SwipeCloseSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
   const closingRef = useRef(false);
   const onCloseRef = useRef(onClose);
+  const exitVelocityRef = useRef(0);
+  const animRef = useRef<ReturnType<typeof animate> | null>(null);
+  const [shown, setShown] = useState(open);
   onCloseRef.current = onClose;
+
+  if (open && !shown) setShown(true);
 
   const originX = () => (side === "left" ? -window.innerWidth : window.innerWidth);
 
-  useEffect(() => {
-    if (!open) return;
-    closingRef.current = false;
-    x.set(originX());
-    void animate(x, 0, SPRING);
-  }, [open, side, x]);
+  const stopAnim = () => {
+    animRef.current?.stop();
+    animRef.current = null;
+  };
+
+  const slideTo = (target: number, velocity = 0) => {
+    stopAnim();
+    const playback = animate(x, target, { ...SPRING, velocity });
+    animRef.current = playback;
+    return playback;
+  };
+
+  useLayoutEffect(() => {
+    if (!shown) return;
+
+    if (open) {
+      closingRef.current = false;
+      exitVelocityRef.current = 0;
+      if (Math.abs(x.get()) < 8) x.set(originX());
+      void slideTo(0);
+      return stopAnim;
+    }
+
+    closingRef.current = true;
+    const offscreen = originX();
+    if (Math.abs(x.get() - offscreen) < 16) {
+      setShown(false);
+      return;
+    }
+    const velocity = exitVelocityRef.current;
+    exitVelocityRef.current = 0;
+    let finished = false;
+    const finish = () => {
+      if (finished || !closingRef.current) return;
+      finished = true;
+      stopAnim();
+      setShown(false);
+    };
+    void slideTo(offscreen, velocity).then(finish);
+    const unsub = x.on("change", (value) => {
+      if (Math.abs(value - offscreen) < 24) finish();
+    });
+    return () => {
+      unsub();
+      stopAnim();
+    };
+  }, [open, shown, side, x]);
 
   useEffect(() => {
     const el = sheetRef.current;
-    if (!open || !el) return;
+    if (!shown || !open || !el) return;
 
     let start: Point | null = null;
     let locked: null | "h" | "v" = null;
@@ -61,11 +107,12 @@ export default function SwipeCloseSheet({
     const finishClose = (velocity = 0) => {
       if (closingRef.current) return;
       closingRef.current = true;
-      void animate(x, originX(), { ...SPRING, velocity }).then(() => onCloseRef.current());
+      exitVelocityRef.current = velocity;
+      onCloseRef.current();
     };
 
     const snapBack = () => {
-      void animate(x, 0, SPRING);
+      void slideTo(0);
     };
 
     const markHorizontal = () => {
@@ -116,6 +163,7 @@ export default function SwipeCloseSheet({
 
       if (locked !== "h") return;
       if (e.cancelable) e.preventDefault();
+      stopAnim();
       x.set(side === "left" ? Math.min(0, dx) : Math.max(0, dx));
     };
 
@@ -180,15 +228,20 @@ export default function SwipeCloseSheet({
       el.removeEventListener("pointercancel", onEnd, true);
       el.removeEventListener("click", onClickCapture, true);
     };
-  }, [open, side, x]);
+  }, [open, shown, side, x]);
 
-  if (!open) return null;
+  if (!shown) return null;
 
   return (
     <motion.div
       ref={sheetRef}
       className={className}
-      style={{ x, overscrollBehaviorX: "none", ...style }}
+      style={{
+        x,
+        overscrollBehaviorX: "none",
+        pointerEvents: open ? undefined : "none",
+        ...style,
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}

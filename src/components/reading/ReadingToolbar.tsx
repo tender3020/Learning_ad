@@ -1,14 +1,18 @@
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Focus, Type } from "lucide-react";
+import { Focus, Loader2, Type } from "lucide-react";
 import {
   FONT_SIZES,
-  READING_FONT_LABELS,
   READING_LEADING_LABELS,
-  type ReadingFontFamily,
   type ReadingFontSize,
   type ReadingLineHeight,
   type ReadingMode,
 } from "@/hooks/useReadingPrefs";
+import {
+  READING_FONTS,
+  readingFontStack,
+  type ReadingFontFamily,
+} from "@/lib/reading-fonts";
 
 type ReadingToolbarProps = {
   open: boolean;
@@ -25,6 +29,8 @@ type ReadingToolbarProps = {
     fontFamily?: ReadingFontFamily;
     focusMode?: boolean;
   }) => void;
+  onFontFamilyChange?: (fontFamily: ReadingFontFamily) => Promise<void> | void;
+  fontLoading?: ReadingFontFamily | null;
 };
 
 const MODES: { id: ReadingMode; label: string; swatch: string }[] = [
@@ -34,7 +40,6 @@ const MODES: { id: ReadingMode; label: string; swatch: string }[] = [
 ];
 
 const LEADINGS: ReadingLineHeight[] = ["tight", "normal", "relaxed"];
-const FONTS: ReadingFontFamily[] = ["system", "song", "hei", "kai", "yuan"];
 
 export function ReadingSettingsButton({
   onClick,
@@ -68,8 +73,11 @@ export default function ReadingToolbar({
   fontFamily,
   focusMode,
   onChange,
+  onFontFamilyChange,
+  fontLoading = null,
 }: ReadingToolbarProps) {
   const sizeIndex = FONT_SIZES.indexOf(fontSize);
+  const [fontError, setFontError] = useState("");
 
   return (
     <AnimatePresence>
@@ -130,18 +138,26 @@ export default function ReadingToolbar({
             <div className="reading-settings-row reading-settings-row--wrap">
               <span className="reading-settings-label">字体</span>
               <div className="reading-settings-fonts">
-                {FONTS.map((id) => (
+                {READING_FONTS.map((font) => (
                   <button
-                    key={id}
+                    key={font.id}
                     type="button"
-                    className={`reading-settings-font ${fontFamily === id ? "is-active" : ""} reading-font-${id}`}
-                    onClick={() => onChange({ fontFamily: id })}
+                    disabled={fontLoading !== null}
+                    className={`reading-settings-font ${fontFamily === font.id ? "is-active" : ""}`}
+                    style={{ fontFamily: readingFontStack(font.id) }}
+                    onClick={() => {
+                      setFontError("");
+                      void Promise.resolve(onFontFamilyChange ? onFontFamilyChange(font.id) : onChange({ fontFamily: font.id }))
+                        .catch(() => setFontError("字体下载失败，请检查网络后重试"));
+                    }}
                   >
-                    {READING_FONT_LABELS[id]}
+                    {fontLoading === font.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                    {font.label}
                   </button>
                 ))}
               </div>
             </div>
+            {fontError ? <p className="reading-settings-font-hint">{fontError}</p> : null}
 
             <div className="reading-settings-row">
               <span className="reading-settings-label">背景</span>

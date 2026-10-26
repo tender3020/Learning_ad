@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  READING_FONT_LABELS,
+  ensureReadingFont,
+  isReadingFontId,
+  needsWebFont,
+  type ReadingFontFamily,
+} from "@/lib/reading-fonts";
 
 export type ReadingMode = "app" | "soft-dark" | "warm";
 export type ReadingFontSize = "xs" | "sm" | "md" | "lg" | "xl";
 export type ReadingLineHeight = "tight" | "normal" | "relaxed";
-export type ReadingFontFamily = "system" | "song" | "hei" | "kai" | "yuan";
+export type { ReadingFontFamily };
+export { READING_FONT_LABELS };
 
 export type ReadingPrefs = {
   mode: ReadingMode;
@@ -16,7 +24,7 @@ export type ReadingPrefs = {
 const STORAGE_KEY = "yizhi-reading-prefs";
 
 const DEFAULT_PREFS: ReadingPrefs = {
-  mode: "soft-dark",
+  mode: "app",
   fontSize: "md",
   lineHeight: "relaxed",
   fontFamily: "system",
@@ -29,14 +37,6 @@ export const READING_MODE_LABELS: Record<ReadingMode, string> = {
   app: "跟随应用",
   "soft-dark": "柔和深色",
   warm: "暖色护眼",
-};
-
-export const READING_FONT_LABELS: Record<ReadingFontFamily, string> = {
-  system: "系统",
-  song: "宋体",
-  hei: "黑体",
-  kai: "楷体",
-  yuan: "圆体",
 };
 
 export const READING_LEADING_LABELS: Record<ReadingLineHeight, string> = {
@@ -57,7 +57,7 @@ function loadPrefs(): ReadingPrefs {
       parsed.lineHeight === "tight" || parsed.lineHeight === "normal" || parsed.lineHeight === "relaxed"
         ? parsed.lineHeight
         : DEFAULT_PREFS.lineHeight;
-    const fontFamily = parsed.fontFamily && parsed.fontFamily in READING_FONT_LABELS
+    const fontFamily = isReadingFontId(parsed.fontFamily)
       ? parsed.fontFamily
       : DEFAULT_PREFS.fontFamily;
     return {
@@ -78,14 +78,45 @@ function savePrefs(prefs: ReadingPrefs) {
 
 export function useReadingPrefs() {
   const [prefs, setPrefsState] = useState<ReadingPrefs>(loadPrefs);
+  const [fontLoading, setFontLoading] = useState<ReadingFontFamily | null>(null);
 
   useEffect(() => {
     savePrefs(prefs);
   }, [prefs]);
 
+  useEffect(() => {
+    if (!needsWebFont(prefs.fontFamily)) return;
+    let cancelled = false;
+    setFontLoading(prefs.fontFamily);
+    void ensureReadingFont(prefs.fontFamily)
+      .catch((error) => {
+        console.warn("[reading-fonts]", error);
+      })
+      .finally(() => {
+        if (!cancelled) setFontLoading(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [prefs.fontFamily]);
+
   const setPrefs = useCallback((patch: Partial<ReadingPrefs>) => {
     setPrefsState((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  return { prefs, setPrefs };
+  const setFontFamily = useCallback(async (fontFamily: ReadingFontFamily) => {
+    if (needsWebFont(fontFamily)) {
+      setFontLoading(fontFamily);
+      try {
+        await ensureReadingFont(fontFamily);
+      } catch (error) {
+        setFontLoading(null);
+        throw error instanceof Error ? error : new Error("字体下载失败");
+      }
+    }
+    setPrefsState((prev) => ({ ...prev, fontFamily }));
+    setFontLoading(null);
+  }, []);
+
+  return { prefs, setPrefs, setFontFamily, fontLoading };
 }

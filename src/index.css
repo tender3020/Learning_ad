@@ -616,18 +616,54 @@
 
 /* 浅色主题公式颜色 */
 .markdown-body .mermaid-diagram {
-  margin: 1rem 0;
-  padding: 1rem;
+  display: block;
+  width: 100%;
+  margin: 1.1rem 0 1.25rem;
+  padding: 0.85rem 0.65rem 1.35rem;
   min-height: 120px;
-  border-radius: 12px;
-  background: var(--pre-bg);
-  border: 1px solid var(--pre-border);
+  border-radius: 14px;
+  background: var(--reading-card-bg, var(--pre-bg));
+  border: 1px solid var(--reading-card-border, var(--pre-border));
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
+  text-align: left;
+  color: inherit;
+  cursor: zoom-in;
+}
+
+.markdown-body .mermaid-diagram--interactive {
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .markdown-body .mermaid-diagram-pending {
-  opacity: 0.35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  cursor: default;
+}
+
+.markdown-body .mermaid-diagram__status,
+.markdown-body .mermaid-diagram__hint {
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  color: var(--reading-text-muted, var(--text-secondary));
+}
+
+.markdown-body .mermaid-diagram__hint {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.4rem;
+  pointer-events: none;
+}
+
+.markdown-body .mermaid-diagram--interactive {
+  position: relative;
+}
+
+.markdown-body .mermaid-diagram__canvas {
+  pointer-events: none;
 }
 
 .markdown-body .mermaid-diagram-error {
@@ -666,6 +702,65 @@
   max-width: 100%;
   height: auto;
   margin: 0 auto;
+}
+
+.mermaid-lightbox {
+  position: fixed;
+  top: var(--vv-top, 0px);
+  left: var(--vv-left, 0px);
+  width: var(--vv-width, 100%);
+  height: var(--vv-height, 100%);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 0.75rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.mermaid-lightbox__stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  border-radius: 16px;
+  background: var(--reading-bg, var(--bg-primary));
+  border: 1px solid var(--reading-card-border, var(--surface-border));
+}
+
+.mermaid-lightbox__canvas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.mermaid-lightbox__canvas svg {
+  display: block;
+  flex: 0 0 auto;
+  margin: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+}
+
+.mermaid-lightbox__close {
+  flex: 0 0 auto;
+  align-self: center;
+  min-width: 5.5rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+  border: 1px solid var(--surface-border);
 }
 
 .study-content-scroll {
@@ -900,6 +995,25 @@
   border: 1px solid transparent;
 }
 
+.reading-settings-font {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.reading-settings-font:disabled {
+  opacity: 0.7;
+}
+
+.reading-settings-font-hint {
+  margin: -0.15rem 0 0.15rem;
+  padding: 0 0.15rem;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
 .reading-settings-seg__btn.is-active,
 .reading-settings-font.is-active {
   color: var(--text-primary);
@@ -1060,20 +1174,16 @@ html.reading-immersive .reading-article {
 .reading-leading-normal { --reading-line-height: 1.75; }
 .reading-leading-relaxed { --reading-line-height: 1.95; }
 
-.reading-font-system {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+.reading-shell {
+  font-family: var(--reading-font-family, inherit);
 }
-.reading-font-song {
-  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif SC", "Source Han Serif SC", serif;
+
+.reading-shell .markdown-body {
+  font-family: inherit;
 }
-.reading-font-hei {
-  font-family: "PingFang SC", "Heiti SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-}
-.reading-font-kai {
-  font-family: "Kaiti SC", "STKaiti", "KaiTi", "楷体", serif;
-}
-.reading-font-yuan {
-  font-family: "Yuanti SC", "STYuanti", "YouYuan", "PingFang SC", sans-serif;
+
+.reading-shell :is(code, pre, kbd, .katex) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .markdown-body.reading .reading-h1 {
@@ -1150,6 +1260,7 @@ html.reading-immersive .reading-article {
 .app-mobile-chrome-offset {
   flex-shrink: 0;
   height: calc(env(safe-area-inset-top, 0px) + 2.5rem);
+  pointer-events: none;
 }
 
 /* 抽屉横向滑动关闭时，不把手指落到的卡片当成点击 */
