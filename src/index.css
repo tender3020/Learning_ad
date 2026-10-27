@@ -732,13 +732,11 @@
 }
 
 .mermaid-lightbox__stage {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   touch-action: none;
   border-radius: 16px;
   background: var(--reading-bg, var(--bg-primary));
@@ -746,13 +744,14 @@
 }
 
 .mermaid-lightbox__canvas {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
   box-sizing: border-box;
-  flex: 0 0 auto;
   padding: 0;
-  transform-origin: center center;
+  margin: 0;
+  transform: none;
   touch-action: none;
 }
 
