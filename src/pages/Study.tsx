@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,6 +27,82 @@ import {
   X,
   ChevronLeft,
 } from "lucide-react";
+
+const CHROME_MOTION_MS = 460;
+const CHROME_MOTION_EASE = "cubic-bezier(0.42, 0, 0.58, 1)";
+
+type ChromeKind = "top" | "header" | "ask" | "side";
+
+const savedChromeBg = new WeakMap<HTMLElement, string>();
+
+function chromeKind(el: HTMLElement): ChromeKind {
+  if (el.classList.contains("study-ask-bar")) return "ask";
+  if (el.classList.contains("study-desktop-sidebar")) return "side";
+  if (el.classList.contains("app-mobile-topbar")) return "top";
+  return "header";
+}
+
+function hiddenChromeTransform(kind: ChromeKind, dy: number, rect: DOMRect) {
+  if (kind === "ask") return "translate3d(0, 100%, 0)";
+  if (kind === "side") return `translate3d(${-Math.ceil(rect.right)}px, 0, 0)`;
+  return `translate3d(0, ${-dy}px, 0)`;
+}
+
+function clearChromeMotion(el: HTMLElement) {
+  el.style.position = "";
+  el.style.left = "";
+  el.style.top = "";
+  el.style.width = "";
+  el.style.height = "";
+  el.style.margin = "";
+  el.style.zIndex = "";
+  el.style.transform = "";
+  el.style.transition = "";
+  el.style.boxSizing = "";
+  el.style.pointerEvents = "";
+  el.style.willChange = "";
+  el.style.opacity = "";
+  if (savedChromeBg.has(el)) {
+    el.style.backgroundColor = savedChromeBg.get(el) ?? "";
+    savedChromeBg.delete(el);
+  }
+}
+
+function pinChrome(el: HTMLElement, rect: DOMRect) {
+  if (!savedChromeBg.has(el)) savedChromeBg.set(el, el.style.backgroundColor);
+  el.style.position = "fixed";
+  el.style.left = `${rect.left}px`;
+  el.style.top = `${rect.top}px`;
+  el.style.width = `${rect.width}px`;
+  el.style.height = `${rect.height}px`;
+  el.style.margin = "0";
+  el.style.boxSizing = "border-box";
+  el.style.zIndex = el.classList.contains("study-desktop-sidebar") ? "12" : "40";
+  el.style.pointerEvents = "none";
+  el.style.willChange = "transform";
+  if (!el.classList.contains("study-desktop-sidebar")) {
+    el.style.backgroundColor = "var(--bg-primary)";
+  }
+  const next = el.getBoundingClientRect();
+  const dx = rect.left - next.left;
+  const dy = rect.top - next.top;
+  if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+    el.style.left = `${rect.left + dx}px`;
+    el.style.top = `${rect.top + dy}px`;
+  }
+}
+
+function collectChrome(scroller: HTMLElement) {
+  const column = scroller.parentElement?.parentElement;
+  const frame = column?.parentElement;
+  const nodes = [
+    document.querySelector<HTMLElement>(".app-mobile-topbar"),
+    column?.querySelector<HTMLElement>(":scope > .today-header") ?? null,
+    column?.querySelector<HTMLElement>(":scope > .study-ask-bar") ?? null,
+    frame?.querySelector<HTMLElement>(":scope > .study-desktop-sidebar") ?? null,
+  ];
+  return nodes.filter((el): el is HTMLElement => !!el && el.getClientRects().length > 0 && el.getBoundingClientRect().height > 1);
+}
 
 export default function Study() {
   const store = useLearningStore();
@@ -479,29 +555,123 @@ export default function Study() {
     setBreakDismissed(false);
   }, [store.currentDay]);
 
-  const rememberChromeHeight = () => {
-    document.querySelectorAll(".app-mobile-topbar, .today-header, .study-ask-bar").forEach((node) => {
-      if (!(node instanceof HTMLElement) || node.getClientRects().length === 0) return;
-      const height = node.scrollHeight;
-      if (height > 0) node.style.setProperty("--chrome-height", `${height}px`);
-    });
-  };
+  const motionGen = useRef(0);
 
-  useEffect(() => {
-    document.documentElement.classList.toggle("reading-immersive", immersive);
-    setNativeStatusBarVisible(!immersive);
-    const measureTimer = immersive ? undefined : window.setTimeout(rememberChromeHeight, 380);
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const scroller = contentScrollRef.current;
+    const article = scroller?.querySelector<HTMLElement>(".reading-article") ?? null;
+    if (!scroller || !article || article.getClientRects().length === 0) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      root.classList.toggle("reading-immersive", immersive);
+      setNativeStatusBarVisible(!immersive);
+      return () => {
+        root.classList.remove("reading-immersive", "reading-chrome-move");
+        delete root.dataset.readingMotion;
+        setNativeStatusBarVisible(true);
+      };
+    }
+
+    const direction = immersive ? "enter" : "exit";
+    const gen = ++motionGen.current;
+    let timer = 0;
+    const transition = `transform ${CHROME_MOTION_MS}ms ${CHROME_MOTION_EASE}`;
+
+    const strip = () => {
+      clearChromeMotion(article);
+      document.querySelectorAll<HTMLElement>(".app-mobile-topbar, .today-header, .study-ask-bar, .study-desktop-sidebar").forEach((el) => {
+        if (el.style.position === "fixed" || el.style.transform || savedChromeBg.has(el)) clearChromeMotion(el);
+      });
+    };
+
+    const finishEnter = () => {
+      if (motionGen.current !== gen) return;
+      article.style.transition = "none";
+      strip();
+      root.classList.remove("reading-chrome-move");
+      delete root.dataset.readingMotion;
+      root.classList.add("reading-immersive");
+      setNativeStatusBarVisible(false);
+    };
+
+    const finishExit = () => {
+      if (motionGen.current !== gen) return;
+      article.style.transition = "none";
+      strip();
+      root.classList.remove("reading-chrome-move", "reading-immersive");
+      delete root.dataset.readingMotion;
+      setNativeStatusBarVisible(true);
+    };
+
+    const glide = (entering: boolean) => {
+      const marker = article.querySelector<HTMLElement>(".reading-shell") ?? article;
+      const open = marker.getBoundingClientRect();
+      const bars = collectChrome(scroller).map((el) => ({
+        el,
+        kind: chromeKind(el),
+        rect: el.getBoundingClientRect(),
+      }));
+      root.classList.add("reading-chrome-move", "reading-immersive");
+      root.dataset.readingMotion = entering ? "enter" : "exit";
+      bars.forEach(({ el, rect }) => pinChrome(el, rect));
+      const collapsed = marker.getBoundingClientRect();
+      const dx = open.left - collapsed.left;
+      const dy = open.top - collapsed.top;
+      article.style.willChange = "transform";
+      article.style.transition = "none";
+      article.style.transform = entering ? `translate3d(${dx}px, ${dy}px, 0)` : "translate3d(0, 0, 0)";
+      bars.forEach(({ el, kind, rect }) => {
+        el.style.transition = "none";
+        el.style.transform = entering ? "translate3d(0, 0, 0)" : hiddenChromeTransform(kind, dy, rect);
+      });
+      void article.offsetHeight;
+      article.style.transition = transition;
+      article.style.transform = entering ? "translate3d(0, 0, 0)" : `translate3d(${dx}px, ${dy}px, 0)`;
+      bars.forEach(({ el, kind, rect }) => {
+        el.style.transition = transition;
+        el.style.transform = entering ? hiddenChromeTransform(kind, dy, rect) : "translate3d(0, 0, 0)";
+      });
+      timer = window.setTimeout(entering ? finishEnter : finishExit, CHROME_MOTION_MS + 40);
+    };
+
+    if (root.classList.contains("reading-chrome-move")) {
+      if (root.dataset.readingMotion === direction) {
+        timer = window.setTimeout(immersive ? finishEnter : finishExit, CHROME_MOTION_MS + 40);
+      } else {
+        strip();
+        root.classList.remove("reading-chrome-move");
+        delete root.dataset.readingMotion;
+        root.classList.toggle("reading-immersive", immersive);
         setNativeStatusBarVisible(!immersive);
+      }
+    } else if (immersive) {
+      glide(true);
+    } else if (root.classList.contains("reading-immersive")) {
+      root.classList.remove("reading-immersive");
+      glide(false);
+    }
+
+    const onVis = () => {
+      if (document.visibilityState === "visible" && !root.classList.contains("reading-chrome-move")) {
+        setNativeStatusBarVisible(!root.classList.contains("reading-immersive"));
       }
     };
     document.addEventListener("visibilitychange", onVis);
+
     return () => {
-      if (measureTimer) window.clearTimeout(measureTimer);
+      window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVis);
-      document.documentElement.classList.remove("reading-immersive");
-      setNativeStatusBarVisible(true);
+      const id = gen;
+      queueMicrotask(() => {
+        if (motionGen.current !== id) return;
+        article.style.transition = "none";
+        strip();
+        root.classList.remove("reading-chrome-move", "reading-immersive");
+        delete root.dataset.readingMotion;
+        setNativeStatusBarVisible(true);
+      });
     };
   }, [immersive]);
 
@@ -539,7 +709,7 @@ export default function Study() {
       return;
     }
     if (content && !isStreaming) {
-      if (!immersive) rememberChromeHeight();
+      if (document.documentElement.classList.contains("reading-chrome-move")) return;
       setImmersive((v) => !v);
     }
   };

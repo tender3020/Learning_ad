@@ -477,10 +477,30 @@ function MermaidDiagram({ chart, deferRender = false }: MermaidDiagramProps) {
     renderChart();
 
     const shell = boxRef.current?.closest(".reading-shell") ?? document.documentElement;
-    const observer = new MutationObserver(renderChart);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    const classChanged = (mutation: MutationRecord) => {
+      if (mutation.attributeName !== "class" || !(mutation.target instanceof Element)) return false;
+      const meaningful = (value: string | null) =>
+        (value ?? "")
+          .split(/\s+/)
+          .filter((token) => token && token !== "reading-immersive")
+          .sort()
+          .join(" ");
+      return meaningful(mutation.oldValue) !== meaningful(mutation.target.getAttribute("class"));
+    };
+    const observer = new MutationObserver((mutations) => {
+      if (mutations.some(classChanged)) renderChart();
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+      attributeOldValue: true,
+    });
     if (shell !== document.documentElement) {
-      observer.observe(shell, { attributes: true, attributeFilter: ["class"] });
+      observer.observe(shell, {
+        attributes: true,
+        attributeFilter: ["class"],
+        attributeOldValue: true,
+      });
     }
 
     return () => {

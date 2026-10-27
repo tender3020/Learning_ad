@@ -614,6 +614,14 @@
   white-space: nowrap;
 }
 
+/* mermaid.render 会把测量节点挂到 body 末尾。留在文档流里会在点击时把页面撑高，底部闪出滚动条。 */
+body > div[id^="dmermaid-"] {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  pointer-events: none;
+}
+
 /* 浅色主题公式颜色 */
 .markdown-body .mermaid-diagram {
   display: block;
@@ -1081,69 +1089,37 @@
   color: var(--text-primary);
 }
 
-.app-mobile-topbar,
-.today-header,
-.study-ask-bar {
-  max-height: var(--chrome-height, 12rem);
-  overflow: hidden;
-  transition:
-    max-height 0.34s cubic-bezier(0.32, 0.72, 0, 1),
-    padding 0.34s cubic-bezier(0.32, 0.72, 0, 1),
-    transform 0.34s cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 0.26s ease,
-    border-color 0.24s ease;
-}
-
-html.reading-immersive .app-mobile-topbar,
-html.reading-immersive .today-header {
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
+/* 沉浸式的画面由 Study 里的位移接管。这里只负责动画结束后的最终占位，避免 max-height 和位移各走各的。 */
+html.reading-immersive:not(.reading-chrome-move) .app-mobile-topbar,
+html.reading-immersive:not(.reading-chrome-move) .today-header,
+html.reading-immersive:not(.reading-chrome-move) .study-ask-bar {
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border-width: 0 !important;
   opacity: 0;
-  transform: translateY(-100%);
-  border-color: transparent;
+  overflow: hidden !important;
   pointer-events: none;
 }
 
-html.reading-immersive .study-ask-bar {
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
-  transform: translateY(100%);
-  pointer-events: none;
-}
-
-.study-desktop-sidebar {
-  transition:
-    width 0.34s cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 0.24s ease,
-    padding 0.34s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-html.reading-immersive .study-desktop-sidebar {
+html.reading-immersive:not(.reading-chrome-move) .study-desktop-sidebar {
   width: 0 !important;
   min-width: 0 !important;
   flex-basis: 0 !important;
-  padding-left: 0;
-  padding-right: 0;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-width: 0 !important;
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
-  border-color: transparent;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .app-mobile-topbar,
-  .today-header,
-  .study-ask-bar,
-  .study-desktop-sidebar,
-  .app-mobile-topbar > *,
-  .today-header > *,
-  .study-ask-bar > *,
-  .reading-article {
-    transition: none;
-  }
+html.reading-chrome-move .study-content-scroll {
+  overflow-anchor: none;
 }
 
 .reading-article {
@@ -1151,7 +1127,6 @@ html.reading-immersive .study-desktop-sidebar {
   max-width: min(46rem, 100%);
   margin: 0 auto;
   padding: 0;
-  transition: padding 0.34s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .yizhi-desk .reading-article {
