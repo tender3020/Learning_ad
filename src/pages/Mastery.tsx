@@ -52,8 +52,8 @@ export default function Mastery() {
       <div className="relative z-10 px-3 py-3 md:p-8 max-w-6xl mx-auto">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-8">
-          <h1 className="hidden md:block text-lg md:text-3xl font-semibold text-[var(--text-primary)] mb-1 md:mb-2">掌握度分析</h1>
-          <p className="hidden md:block text-xs md:text-sm text-[var(--text-secondary)]">基于学习时长、问答互动、练习正确率、学习频率四维加权计算</p>
+          <h1 className="hidden desk:block text-lg md:text-3xl font-semibold text-[var(--text-primary)] mb-1 md:mb-2">掌握度分析</h1>
+          <p className="hidden desk:block text-xs md:text-sm text-[var(--text-secondary)]">基于学习时长、问答互动、练习正确率、学习频率四维加权计算</p>
         </motion.div>
 
         {/* Stats - 2x2(手机) / 4列(桌面) */}

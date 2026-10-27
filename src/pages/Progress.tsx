@@ -135,8 +135,8 @@ export default function Progress() {
     <div className="h-full overflow-y-auto">
       <div className="px-3 py-3 md:p-8 max-w-6xl mx-auto">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-6">
-          <h1 className="hidden md:block text-lg md:text-3xl font-semibold text-token-primary mb-1">学习进度</h1>
-          <p className="hidden md:block text-xs md:text-sm text-token-secondary truncate">{store.goal || "当前计划"}</p>
+          <h1 className="hidden desk:block text-lg md:text-3xl font-semibold text-token-primary mb-1">学习进度</h1>
+          <p className="hidden desk:block text-xs md:text-sm text-token-secondary truncate">{store.goal || "当前计划"}</p>
         </motion.div>
 
         <motion.div

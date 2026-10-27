@@ -62,7 +62,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="h-dvh w-screen overflow-hidden" style={{ backgroundColor: "var(--bg-primary)" }}>
-      <div className="hidden md:flex h-full w-full">
+      <div className="hidden desk:flex h-full w-full">
         <aside className="w-[220px] lg:w-[240px] liquid-glass border-r border-token-surface z-20 flex flex-col flex-shrink-0">
           <div className="flex items-center gap-2.5 px-4 py-4">
             <img src="/logo.png" alt="弈智" className="w-7 h-7 rounded-lg flex-shrink-0" />
@@ -124,7 +124,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </main>
       </div>
 
-      <div className="md:hidden flex flex-col h-full w-full">
+      <div className="flex desk:hidden flex-col h-full w-full">
         <div
           className="app-mobile-topbar relative safe-area-pt backdrop-blur-xl border-b border-token-surface z-40 flex-shrink-0"
           style={{ backgroundColor: "color-mix(in srgb, var(--bg-primary) 80%, transparent)" }}
@@ -186,7 +186,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           onClose={() => setMobileView("none")}
           side="right"
           aria-label="学习进度"
-          className="fixed inset-0 z-[25] md:hidden flex flex-col"
+          className="fixed inset-0 z-[25] flex desk:hidden flex-col"
           style={{ backgroundColor: "var(--bg-primary)" }}
         >
           <div className="app-mobile-chrome-offset" aria-hidden />

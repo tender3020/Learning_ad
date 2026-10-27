@@ -48,7 +48,7 @@ export default function MobileMenuDrawer({ open, onClose }: MobileMenuDrawerProp
       onClose={onClose}
       side="left"
       aria-label="菜单"
-      className="fixed inset-0 z-[25] md:hidden flex flex-col"
+      className="fixed inset-0 z-[25] flex desk:hidden flex-col"
       style={{ backgroundColor: "var(--bg-primary)" }}
     >
       <div className="app-mobile-chrome-offset" aria-hidden />

@@ -46,8 +46,8 @@ export default function History() {
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-8">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h1 className="hidden md:block text-lg md:text-3xl font-semibold text-[var(--text-primary)] mb-1 md:mb-2">问答历史</h1>
-              <p className="hidden md:block text-xs md:text-sm text-[var(--text-secondary)]">查看你与 AI 导师的所有对话记录</p>
+              <h1 className="hidden desk:block text-lg md:text-3xl font-semibold text-[var(--text-primary)] mb-1 md:mb-2">问答历史</h1>
+              <p className="hidden desk:block text-xs md:text-sm text-[var(--text-secondary)]">查看你与 AI 导师的所有对话记录</p>
             </div>
             <div className="ml-auto flex items-center gap-2 liquid-glass rounded-xl p-1 w-fit">
               <button onClick={() => setFilter("all")}

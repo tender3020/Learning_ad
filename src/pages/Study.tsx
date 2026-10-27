@@ -560,7 +560,7 @@ export default function Study() {
   return (
     <div className={`h-full flex relative ${readingPrefs.focusMode ? "study-focus-mode" : ""}`}>
       {/* ===== 桌面端侧边大纲 (md 及以上) ===== */}
-      <div className={`study-desktop-sidebar hidden md:flex w-60 lg:w-64 h-full liquid-glass border-r border-token-surface z-10 flex-col flex-shrink-0 ${readingPrefs.focusMode ? "study-sidebar-dim" : ""}`}>
+      <div className={`study-desktop-sidebar hidden desk:flex w-60 lg:w-64 h-full liquid-glass border-r border-token-surface z-10 flex-col flex-shrink-0 ${readingPrefs.focusMode ? "study-sidebar-dim" : ""}`}>
         <div className="p-4 border-b border-token-surface">
           <h2 className="type-caption font-medium text-token-secondary uppercase tracking-wider">学习大纲</h2>
           <p className="type-caption text-token-secondary mt-1 truncate">{store.goal || "学习计划"}</p>
@@ -654,7 +654,7 @@ export default function Study() {
               <button
                 type="button"
                 onClick={() => setShowQA(!showQA)}
-                className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl type-caption font-medium transition-all ${
+                className={`hidden desk:flex items-center gap-1.5 px-3 py-1.5 rounded-xl type-caption font-medium transition-all ${
                   showQA
                     ? "bg-token-brand-muted text-token-brand-light border border-[color-mix(in_srgb,var(--brand-primary)_30%,transparent)]"
                     : "text-token-secondary hover:text-token-primary hover-surface"
@@ -838,7 +838,7 @@ export default function Study() {
         />
 
         {/* ===== 移动端常驻提问条：点击后模糊过渡到独立问答页 ===== */}
-        <div className="study-ask-bar md:hidden flex-shrink-0 px-3 pt-2 pb-3 safe-area-pb">
+        <div className="study-ask-bar flex desk:hidden flex-shrink-0 px-3 pt-2 pb-3 safe-area-pb">
           <button
             type="button"
             onClick={openQA}

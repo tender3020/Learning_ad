@@ -63,7 +63,7 @@ export default function TodayHeader({
                 <button
                   type="button"
                   onClick={onOpenOutline}
-                  className="type-caption font-medium text-token-brand rounded-md px-1.5 py-0.5 -ml-1.5 max-md:active:bg-token-brand-muted md:pointer-events-none md:cursor-default"
+                  className="type-caption font-medium text-token-brand rounded-md px-1.5 py-0.5 -ml-1.5 max-md:active:bg-token-brand-muted desk:pointer-events-none desk:cursor-default"
                   aria-label={`第 ${dayNumber} 天，共 ${totalDays} 天，打开学习大纲`}
                 >
                   D{dayNumber}/{totalDays}

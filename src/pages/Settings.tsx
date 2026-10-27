@@ -207,7 +207,7 @@ export default function Settings() {
       </AnimatePresence>
 
       <div className="relative z-10 px-3 py-3 md:p-8 max-w-3xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="hidden md:block mb-8">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="hidden desk:block mb-8">
           <h1 className="text-lg md:text-3xl font-semibold mb-1 md:mb-2" style={{ color: 'var(--text-primary)' }}>设置</h1>
           <p className="text-xs md:text-sm" style={{ color: 'var(--text-secondary)' }}>管理你的账户和偏好设置</p>
         </motion.div>

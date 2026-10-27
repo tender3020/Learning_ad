@@ -80,5 +80,10 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    require("tailwindcss/plugin")(({ addVariant }) => {
+      addVariant("desk", ".yizhi-desk &");
+    }),
+  ],
 }

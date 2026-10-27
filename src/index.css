@@ -575,7 +575,7 @@
 
 /* Mobile study FAB */
 .study-mobile-fab {
-  @apply fixed z-40 md:hidden flex items-center justify-center gap-2 px-4 py-3 rounded-full shadow-lg;
+  @apply fixed z-40 flex desk:hidden items-center justify-center gap-2 px-4 py-3 rounded-full shadow-lg;
   background: var(--brand-primary);
   color: white;
   bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
@@ -718,15 +718,28 @@
   background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
   backdrop-filter: blur(10px);
   cursor: zoom-out;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mermaid-lightbox.is-zoomed {
+  cursor: grab;
+}
+
+.mermaid-lightbox.is-zoomed:active {
+  cursor: grabbing;
 }
 
 .mermaid-lightbox__stage {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
   border-radius: 16px;
   background: var(--reading-bg, var(--bg-primary));
   border: 1px solid var(--reading-card-border, var(--surface-border));
@@ -737,9 +750,10 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-width: 100%;
-  min-height: 100%;
-  padding: 1rem;
+  flex: 0 0 auto;
+  padding: 0;
+  transform-origin: center center;
+  touch-action: none;
 }
 
 .mermaid-lightbox__canvas svg {
@@ -1087,11 +1101,9 @@ html.reading-immersive .reading-article {
   padding: 0;
 }
 
-@media (min-width: 768px) {
-  .reading-article {
-    padding: 1.25rem 1.5rem 2rem;
-    max-width: min(44rem, 100%);
-  }
+.yizhi-desk .reading-article {
+  padding: 1.25rem 1.5rem 2rem;
+  max-width: min(44rem, 100%);
 }
 
 @media (min-width: 1280px) {
@@ -1515,76 +1527,74 @@ html.keyboard-open .safe-area-pb {
   color: var(--reading-text-muted);
 }
 
-/* ============ Mobile reading: full-bleed + section dividers ============ */
-@media (max-width: 767px) {
-  .reading-article {
-    max-width: none;
-    padding: 0;
-  }
+/* ============ App reading: full-bleed + section dividers（含手机横屏） ============ */
+html:not(.yizhi-desk) .reading-article {
+  max-width: none;
+  padding: 0;
+}
 
-  .reading-shell {
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-    overflow: visible;
-  }
+html:not(.yizhi-desk) .reading-shell {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
+}
 
-  .reading-shell__inner {
-    padding: 0.65rem 1rem 1.5rem;
-    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
-  }
+html:not(.yizhi-desk) .reading-shell__inner {
+  padding: 0.65rem 1rem 1.5rem;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
 
-  .reading-toolbar {
-    margin: 0 0 0.85rem;
-    padding: 0.55rem 0 0.65rem;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
+html:not(.yizhi-desk) .reading-toolbar {
+  margin: 0 0 0.85rem;
+  padding: 0.55rem 0 0.65rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
 
-  .section-card {
-    border-radius: 0;
-    overflow: visible;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid var(--reading-card-border);
-    padding-bottom: 0.15rem;
-  }
+html:not(.yizhi-desk) .section-card {
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--reading-card-border);
+  padding-bottom: 0.15rem;
+}
 
-  .section-card:last-child {
-    border-bottom: none;
-  }
+html:not(.yizhi-desk) .section-card:last-child {
+  border-bottom: none;
+}
 
-  .section-card__header {
-    padding: 0.85rem 0 0;
-  }
+html:not(.yizhi-desk) .section-card__header {
+  padding: 0.85rem 0 0;
+}
 
-  .section-card__title {
-    font-size: 1rem;
-    padding-bottom: 0.55rem;
-    border-bottom: 1px solid var(--reading-card-border);
-  }
+html:not(.yizhi-desk) .section-card__title {
+  font-size: 1rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--reading-card-border);
+}
 
-  .section-card__body {
-    padding: 0.65rem 0 1.1rem;
-  }
+html:not(.yizhi-desk) .section-card__body {
+  padding: 0.65rem 0 1.1rem;
+}
 
-  .reading-markdown {
-    gap: 0.35rem;
-  }
+html:not(.yizhi-desk) .reading-markdown {
+  gap: 0.35rem;
+}
 
-  .reading-footer {
-    margin-top: 1rem;
-    padding-top: 0.85rem;
-  }
+html:not(.yizhi-desk) .reading-footer {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+}
 
-  .markdown-body .content-illustration {
-    width: 100%;
-    max-width: none;
-  }
+html:not(.yizhi-desk) .markdown-body .content-illustration {
+  width: 100%;
+  max-width: none;
+}
 
-  .markdown-body .mermaid-diagram {
-    transform: translateZ(0);
-    contain: layout style;
-  }
+html:not(.yizhi-desk) .markdown-body .mermaid-diagram {
+  transform: translateZ(0);
+  contain: layout style;
 }
 

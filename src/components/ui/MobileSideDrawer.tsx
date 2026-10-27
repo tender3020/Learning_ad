@@ -34,7 +34,7 @@ export default function MobileSideDrawer({
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const internalScrollRef = useRef<HTMLDivElement>(null);
   const contentRef = scrollRef ?? internalScrollRef;
-  const hideClass = hideFrom === "md" ? "md:hidden" : "lg:hidden";
+  const hideClass = hideFrom === "md" ? "desk:hidden" : "lg:hidden";
 
   useEffect(() => {
     if (!open) return;

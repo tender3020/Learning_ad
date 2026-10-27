@@ -126,6 +126,13 @@ function fitSvgToStage(svg: SVGSVGElement, availW: number, availH: number) {
   svg.style.height = `${size.h * scale}px`;
 }
 
+const LIGHTBOX_MIN_SCALE = 1;
+const LIGHTBOX_MAX_SCALE = 4;
+const LIGHTBOX_TAP_PX = 8;
+
+type Point = { x: number; y: number };
+type View = { scale: number; tx: number; ty: number };
+
 function swallowGhostTap() {
   const stop = (event: Event) => {
     event.stopPropagation();
@@ -139,9 +146,43 @@ function swallowGhostTap() {
   }, 400);
 }
 
+function clampLightboxView(view: View, contentW: number, contentH: number, stageW: number, stageH: number): View {
+  const scale = Math.max(LIGHTBOX_MIN_SCALE, Math.min(LIGHTBOX_MAX_SCALE, view.scale));
+  if (scale <= 1.001) return { scale: 1, tx: 0, ty: 0 };
+  const maxX = Math.max(0, contentW * scale - stageW) / 2;
+  const maxY = Math.max(0, contentH * scale - stageH) / 2;
+  return {
+    scale,
+    tx: Math.max(-maxX, Math.min(maxX, view.tx)),
+    ty: Math.max(-maxY, Math.min(maxY, view.ty)),
+  };
+}
+
 function MermaidLightbox({ svgHtml, onClose }: { svgHtml: string; onClose: () => void }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<View>({ scale: 1, tx: 0, ty: 0 });
+  const pointersRef = useRef(new Map<number, Point>());
+  const gestureRef = useRef<"none" | "pan" | "pinch">("none");
+  const pinchRef = useRef({ dist: 1, localX: 0, localY: 0, scale: 1 });
+  const panRef = useRef({ id: -1, x: 0, y: 0, tx: 0, ty: 0 });
+  const movedRef = useRef(false);
+  const pinchedRef = useRef(false);
+  const [zoomed, setZoomed] = useState(false);
+
+  const paint = (next: View, animate = false) => {
+    const stage = stageRef.current;
+    const canvas = canvasRef.current;
+    if (!stage || !canvas) return;
+    const view = clampLightboxView(next, canvas.offsetWidth, canvas.offsetHeight, stage.clientWidth, stage.clientHeight);
+    viewRef.current = view;
+    canvas.style.transition = animate ? "transform 0.22s ease-out" : "none";
+    canvas.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
+    setZoomed(view.scale > 1.01);
+  };
+
+  const resetView = (animate: boolean) => paint({ scale: 1, tx: 0, ty: 0 }, animate);
 
   const close = () => {
     swallowGhostTap();
@@ -151,6 +192,10 @@ function MermaidLightbox({ svgHtml, onClose }: { svgHtml: string; onClose: () =>
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (viewRef.current.scale > 1.01) {
+        resetView(true);
+        return;
+      }
       swallowGhostTap();
       onClose();
     };
@@ -169,36 +214,146 @@ function MermaidLightbox({ svgHtml, onClose }: { svgHtml: string; onClose: () =>
   }, [onClose]);
 
   useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const block = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault();
+    };
+    root.addEventListener("touchmove", block, { passive: false });
+    return () => root.removeEventListener("touchmove", block);
+  }, []);
+
+  useEffect(() => {
     const stage = stageRef.current;
     const canvas = canvasRef.current;
     if (!stage || !canvas) return;
     const svg = canvas.querySelector("svg");
     if (!(svg instanceof SVGSVGElement)) return;
 
-    const apply = () => {
-      const styles = getComputedStyle(canvas);
-      const padX = (Number.parseFloat(styles.paddingLeft) || 0) + (Number.parseFloat(styles.paddingRight) || 0);
-      const padY = (Number.parseFloat(styles.paddingTop) || 0) + (Number.parseFloat(styles.paddingBottom) || 0);
-      fitSvgToStage(svg, stage.clientWidth - padX - 2, stage.clientHeight - padY - 2);
+    const fit = () => {
+      fitSvgToStage(svg, Math.max(1, stage.clientWidth - 24), Math.max(1, stage.clientHeight - 24));
+      paint(viewRef.current);
     };
 
-    apply();
-    const observer = new ResizeObserver(apply);
+    fit();
+    const observer = new ResizeObserver(fit);
     observer.observe(stage);
     return () => observer.disconnect();
   }, [svgHtml]);
 
-    return (
+  const stagePoint = (point: Point) => {
+    const stage = stageRef.current;
+    if (!stage) return { x: 0, y: 0 };
+    const rect = stage.getBoundingClientRect();
+    return { x: point.x - (rect.left + rect.width / 2), y: point.y - (rect.top + rect.height / 2) };
+  };
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* already released */
+    }
+    const pts = [...pointersRef.current.values()];
+    if (pts.length >= 2 && pts[0] && pts[1]) {
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+      const mid = stagePoint({ x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 });
+      const view = viewRef.current;
+      pinchRef.current = {
+        dist,
+        scale: view.scale,
+        localX: (mid.x - view.tx) / view.scale,
+        localY: (mid.y - view.ty) / view.scale,
+      };
+      gestureRef.current = "pinch";
+      pinchedRef.current = true;
+      movedRef.current = true;
+      return;
+    }
+    gestureRef.current = viewRef.current.scale > 1.01 ? "pan" : "none";
+    panRef.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      tx: viewRef.current.tx,
+      ty: viewRef.current.ty,
+    };
+    movedRef.current = false;
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointersRef.current.has(event.pointerId)) return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const pts = [...pointersRef.current.values()];
+    if (gestureRef.current === "pinch" && pts.length >= 2 && pts[0] && pts[1]) {
+      event.preventDefault();
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+      const mid = stagePoint({ x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 });
+      const pinch = pinchRef.current;
+      const scale = pinch.scale * (dist / pinch.dist);
+      paint({
+        scale,
+        tx: mid.x - pinch.localX * Math.max(LIGHTBOX_MIN_SCALE, Math.min(LIGHTBOX_MAX_SCALE, scale)),
+        ty: mid.y - pinch.localY * Math.max(LIGHTBOX_MIN_SCALE, Math.min(LIGHTBOX_MAX_SCALE, scale)),
+      });
+      return;
+    }
+    if (gestureRef.current === "pan" && panRef.current.id === event.pointerId) {
+      const dx = event.clientX - panRef.current.x;
+      const dy = event.clientY - panRef.current.y;
+      if (Math.hypot(dx, dy) > LIGHTBOX_TAP_PX) movedRef.current = true;
+      event.preventDefault();
+      paint({ scale: viewRef.current.scale, tx: panRef.current.tx + dx, ty: panRef.current.ty + dy });
+      return;
+    }
+    const dx = event.clientX - panRef.current.x;
+    const dy = event.clientY - panRef.current.y;
+    if (Math.hypot(dx, dy) > LIGHTBOX_TAP_PX) movedRef.current = true;
+  };
+
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    pointersRef.current.delete(event.pointerId);
+    if (pointersRef.current.size >= 1) {
+      const entry = [...pointersRef.current.entries()][0];
+      if (entry && viewRef.current.scale > 1.01) {
+        gestureRef.current = "pan";
+        panRef.current = {
+          id: entry[0],
+          x: entry[1].x,
+          y: entry[1].y,
+          tx: viewRef.current.tx,
+          ty: viewRef.current.ty,
+        };
+      } else {
+        gestureRef.current = "none";
+      }
+      return;
+    }
+    const pinched = pinchedRef.current;
+    const moved = movedRef.current;
+    gestureRef.current = "none";
+    pinchedRef.current = false;
+    movedRef.current = false;
+    if (pinched || moved) return;
+    if (viewRef.current.scale > 1.01) resetView(true);
+    else close();
+  };
+
+  return (
     <div
-      className="mermaid-lightbox"
+      ref={rootRef}
+      className={`mermaid-lightbox${zoomed ? " is-zoomed" : ""}`}
       role="dialog"
       aria-modal="true"
-      aria-label="流程图，点按关闭"
-      onPointerDown={(event) => event.stopPropagation()}
-      onPointerUp={(event) => {
-        event.stopPropagation();
-        close();
-      }}
+      aria-label={zoomed ? "流程图已放大，点按回到初始放大，再点按关闭" : "流程图，点按关闭"}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       onClick={(event) => event.stopPropagation()}
     >
       <div ref={stageRef} className="mermaid-lightbox__stage">

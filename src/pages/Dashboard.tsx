@@ -309,7 +309,7 @@ export default function Dashboard({ embedded, onPlanActivated }: DashboardProps 
     <div className={embedded ? "relative" : "h-full relative overflow-y-auto"}>
       <div className={embedded ? "relative z-10 px-3 pb-4" : "relative z-10 px-3 py-3 md:p-8 max-w-4xl mx-auto"}>
         {!embedded && (
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-6 hidden md:block">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 md:mb-6 hidden desk:block">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <h1 className="text-lg md:text-3xl font-semibold text-token-primary mb-0.5">学习计划</h1>
@@ -456,7 +456,7 @@ export default function Dashboard({ embedded, onPlanActivated }: DashboardProps 
             <button
               type="button"
               onClick={() => navigate("/onboarding")}
-              className="hidden md:flex w-full mt-3 py-3 border border-dashed rounded-xl text-token-brand-light hover:bg-token-brand-muted transition-colors items-center justify-center gap-2 text-sm"
+              className="hidden desk:flex w-full mt-3 py-3 border border-dashed rounded-xl text-token-brand-light hover:bg-token-brand-muted transition-colors items-center justify-center gap-2 text-sm"
               style={{ borderColor: "color-mix(in srgb, var(--brand-primary) 35%, transparent)" }}
             >
               <Plus size={16} /> 添加新的学习计划
