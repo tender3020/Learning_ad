@@ -1081,16 +1081,69 @@
   color: var(--text-primary);
 }
 
-html.reading-immersive .app-mobile-topbar,
-html.reading-immersive .today-header,
-html.reading-immersive .study-ask-bar,
-html.reading-immersive .study-desktop-sidebar {
-  display: none !important;
+.app-mobile-topbar,
+.today-header,
+.study-ask-bar {
+  max-height: var(--chrome-height, 12rem);
+  overflow: hidden;
+  transition:
+    max-height 0.34s cubic-bezier(0.32, 0.72, 0, 1),
+    padding 0.34s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.34s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.26s ease,
+    border-color 0.24s ease;
 }
 
-html.reading-immersive .reading-article {
-  padding-top: max(0.75rem, env(safe-area-inset-top));
-  padding-bottom: 2rem;
+html.reading-immersive .app-mobile-topbar,
+html.reading-immersive .today-header {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  transform: translateY(-100%);
+  border-color: transparent;
+  pointer-events: none;
+}
+
+html.reading-immersive .study-ask-bar {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+.study-desktop-sidebar {
+  transition:
+    width 0.34s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.24s ease,
+    padding 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html.reading-immersive .study-desktop-sidebar {
+  width: 0 !important;
+  min-width: 0 !important;
+  flex-basis: 0 !important;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-mobile-topbar,
+  .today-header,
+  .study-ask-bar,
+  .study-desktop-sidebar,
+  .app-mobile-topbar > *,
+  .today-header > *,
+  .study-ask-bar > *,
+  .reading-article {
+    transition: none;
+  }
 }
 
 .reading-article {
@@ -1098,6 +1151,7 @@ html.reading-immersive .reading-article {
   max-width: min(46rem, 100%);
   margin: 0 auto;
   padding: 0;
+  transition: padding 0.34s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .yizhi-desk .reading-article {
@@ -1530,6 +1584,11 @@ html.keyboard-open .safe-area-pb {
 html:not(.yizhi-desk) .reading-article {
   max-width: none;
   padding: 0;
+}
+
+html.reading-immersive:not(.yizhi-desk) .reading-article {
+  padding-top: max(0.65rem, env(safe-area-inset-top));
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
 }
 
 html:not(.yizhi-desk) .reading-shell {

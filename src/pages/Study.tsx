@@ -10,12 +10,12 @@ import { setNativeStatusBarVisible } from "@/lib/nativeStatusBar";
 import { useReadingScrollPersistence } from "@/hooks/useReadingScrollPersistence";
 import TtsButton from "@/components/TtsButton";
 import TodayHeader, { type TodayContentState } from "@/components/today/TodayHeader";
-import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
 import ReadingMarkdown from "@/components/reading/ReadingMarkdown";
 import ReadingShell from "@/components/reading/ReadingShell";
 import ReadingToolbar, { ReadingSettingsButton } from "@/components/reading/ReadingToolbar";
 import MobileSideDrawer from "@/components/ui/MobileSideDrawer";
 import StudyDayOutline, { StudyDayOutlineNav } from "@/components/study/StudyDayOutline";
+import QaThread from "@/components/study/QaThread";
 import { buildDayContentPrompt } from "@shared/contentPrompt";
 import type { LearningType } from "@shared/typeEngine";
 import {
@@ -40,7 +40,9 @@ export default function Study() {
   const [qaMessages, setQaMessages] = useState<Array<{ type: "user" | "ai"; text: string }>>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [error, setError] = useState("");
-  const qaEndRef = useRef<HTMLDivElement>(null);
+  const qaChunkRef = useRef("");
+  const qaFlushRef = useRef<number | null>(null);
+  const qaStreamingRef = useRef(false);
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const prevContentLenRef = useRef(0);
@@ -322,6 +324,26 @@ export default function Study() {
     setQuestion("");
     setIsAiTyping(true);
     setError("");
+    qaChunkRef.current = "";
+    qaStreamingRef.current = true;
+
+    const flushQaChunk = () => {
+      if (qaFlushRef.current != null) {
+        cancelAnimationFrame(qaFlushRef.current);
+        qaFlushRef.current = null;
+      }
+      const chunk = qaChunkRef.current;
+      if (!chunk) return;
+      qaChunkRef.current = "";
+      setQaMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.type === "ai") {
+          next[next.length - 1] = { type: "ai", text: last.text + chunk };
+        }
+        return next;
+      });
+    };
 
     await aiService.streamQA(
       store.currentPlanId,
@@ -329,16 +351,14 @@ export default function Study() {
       userQuestion,
       {
         onToken: (token) => {
-          setQaMessages((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.type === "ai") {
-              next[next.length - 1] = { type: "ai", text: last.text + token };
-            }
-            return next;
-          });
+          qaChunkRef.current += token;
+          if (qaFlushRef.current == null) {
+            qaFlushRef.current = requestAnimationFrame(flushQaChunk);
+          }
         },
         onComplete: () => {
+          flushQaChunk();
+          qaStreamingRef.current = false;
           setIsAiTyping(false);
           utils.qa.getHistory.invalidate({
             planId: store.currentPlanId!,
@@ -350,6 +370,8 @@ export default function Study() {
           }
         },
         onError: (err) => {
+          flushQaChunk();
+          qaStreamingRef.current = false;
           setIsAiTyping(false);
           setQaMessages((prev) => {
             const next = [...prev];
@@ -371,13 +393,9 @@ export default function Study() {
     );
   };
 
-  const showAiPlaceholder =
-    isAiTyping &&
-    qaMessages[qaMessages.length - 1]?.type === "ai" &&
-    !qaMessages[qaMessages.length - 1]?.text;
-
   // 当切换天或历史数据到达时，同步 qaMessages（按天隔离）
   useEffect(() => {
+    if (qaStreamingRef.current) return;
     if (qaHistory && qaHistory.length > 0) {
       // 按时间正序排列（数据库返回倒序）
       const sorted = [...qaHistory].reverse();
@@ -393,8 +411,6 @@ export default function Study() {
       setQaMessages([]);
     }
   }, [qaHistory, store.currentDay]);
-
-  useEffect(() => { qaEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [qaMessages, isAiTyping]);
 
   const handleContentScroll = useCallback(() => {
     if (scrollRafRef.current !== null) return;
@@ -463,9 +479,18 @@ export default function Study() {
     setBreakDismissed(false);
   }, [store.currentDay]);
 
+  const rememberChromeHeight = () => {
+    document.querySelectorAll(".app-mobile-topbar, .today-header, .study-ask-bar").forEach((node) => {
+      if (!(node instanceof HTMLElement) || node.getClientRects().length === 0) return;
+      const height = node.scrollHeight;
+      if (height > 0) node.style.setProperty("--chrome-height", `${height}px`);
+    });
+  };
+
   useEffect(() => {
     document.documentElement.classList.toggle("reading-immersive", immersive);
     setNativeStatusBarVisible(!immersive);
+    const measureTimer = immersive ? undefined : window.setTimeout(rememberChromeHeight, 380);
     const onVis = () => {
       if (document.visibilityState === "visible") {
         setNativeStatusBarVisible(!immersive);
@@ -473,6 +498,7 @@ export default function Study() {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
+      if (measureTimer) window.clearTimeout(measureTimer);
       document.removeEventListener("visibilitychange", onVis);
       document.documentElement.classList.remove("reading-immersive");
       setNativeStatusBarVisible(true);
@@ -512,7 +538,10 @@ export default function Study() {
       setShowReadingSettings(false);
       return;
     }
-    if (content && !isStreaming) setImmersive((v) => !v);
+    if (content && !isStreaming) {
+      if (!immersive) rememberChromeHeight();
+      setImmersive((v) => !v);
+    }
   };
 
   const goToDay = (day: number) => {
@@ -760,8 +789,15 @@ export default function Study() {
                     <p className="type-caption text-token-secondary truncate max-w-[240px]">{qaContextLabel}</p>
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-                  {qaMessages.length === 0 && (
+                <QaThread
+                  className="flex-1 overflow-y-auto p-4 min-h-0"
+                  messages={qaMessages}
+                  isTyping={isAiTyping}
+                  variant="desktop"
+                  ttsIdPrefix="qa"
+                  getStatus={tts.getStatus}
+                  onPlay={tts.play}
+                  empty={
                     <div className="text-center py-10">
                       <MessageCircle size={28} className="mx-auto mb-2 text-token-secondary" />
                       <p className="text-xs text-token-secondary">
@@ -771,40 +807,8 @@ export default function Study() {
                         <p className="type-caption text-token-secondary mt-1">我会结合今日材料为你解答</p>
                       )}
                     </div>
-                  )}
-                  {qaMessages.map((msg, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                      className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
-                      <div className={`flex flex-col gap-1 max-w-[85%] ${msg.type === "user" ? "items-end" : "items-start"}`}>
-                        <div className={`px-4 py-3 rounded-2xl text-sm ${
-                          msg.type === "user" ? "bg-token-brand text-[var(--brand-foreground)] rounded-br-md" : "liquid-glass text-token-primary rounded-bl-md"
-                        }`}>
-                          <MarkdownRenderer content={msg.text} />
-                        </div>
-                        {msg.type === "ai" && (
-                          <TtsButton
-                            id={`qa-${i}`}
-                            text={msg.text}
-                            status={tts.getStatus(`qa-${i}`)}
-                            onPlay={tts.play}
-                          />
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                  {showAiPlaceholder && (
-                    <div className="flex justify-start">
-                      <div className="liquid-glass px-4 py-3 rounded-2xl rounded-bl-md">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <div className="w-1.5 h-1.5 rounded-full bg-token-brand animate-bounce" style={{ animationDelay: "300ms" }} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={qaEndRef} />
-                </div>
+                  }
+                />
                 <div className="p-4 border-t border-token-surface flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
@@ -905,8 +909,15 @@ export default function Study() {
                   <X size={16} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4 min-h-0" style={{ WebkitOverflowScrolling: "touch" }}>
-                {qaMessages.length === 0 && (
+              <QaThread
+                className="flex-1 overflow-y-auto px-4 py-5 min-h-0"
+                messages={qaMessages}
+                isTyping={isAiTyping}
+                variant="mobile"
+                ttsIdPrefix="qa-mobile"
+                getStatus={tts.getStatus}
+                onPlay={tts.play}
+                empty={
                   <div className="text-center pt-16">
                     <div
                       className="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center"
@@ -917,45 +928,8 @@ export default function Study() {
                     <p className="text-sm text-token-primary mb-1">有任何问题都可以问我</p>
                     <p className="text-xs text-token-secondary">解答会显示在这里，不会混入学习正文</p>
                   </div>
-                )}
-                {qaMessages.map((msg, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
-                    <div className={`flex flex-col gap-1 max-w-[86%] ${msg.type === "user" ? "items-end" : "items-start"}`}>
-                      <div
-                        className="px-4 py-3 rounded-2xl text-sm text-token-primary"
-                        style={{
-                          backgroundColor: msg.type === "user" ? "var(--surface-elevated)" : "var(--surface-hover)",
-                          borderBottomRightRadius: msg.type === "user" ? 6 : 16,
-                          borderBottomLeftRadius: msg.type === "ai" ? 6 : 16,
-                        }}
-                      >
-                        <MarkdownRenderer content={msg.text} />
-                      </div>
-                      {msg.type === "ai" && msg.text && (
-                        <TtsButton
-                          id={`qa-mobile-${i}`}
-                          text={msg.text}
-                          status={tts.getStatus(`qa-mobile-${i}`)}
-                          onPlay={tts.play}
-                        />
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-                {showAiPlaceholder && (
-                  <div className="flex justify-start">
-                    <div className="px-4 py-3 rounded-2xl rounded-bl-md" style={{ backgroundColor: "var(--surface-hover)" }}>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-token-primary/50 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <div className="w-1.5 h-1.5 rounded-full bg-token-primary/50 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <div className="w-1.5 h-1.5 rounded-full bg-token-primary/50 animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div ref={qaEndRef} />
-              </div>
+                }
+              />
               <div className="px-3 pt-2 pb-3 safe-area-pb flex-shrink-0">
                 <div
                   className="flex items-center gap-1.5 rounded-full border px-2 py-1.5"
