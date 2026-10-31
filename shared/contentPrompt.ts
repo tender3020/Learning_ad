@@ -51,6 +51,15 @@ export function buildDayContentPrompt(input: DayContentPromptInput): string {
   const objective =
     today.learningObjective || today.goal || "完成今日学习目标";
 
+  const modelApplyExtra =
+    learningType === "model_apply"
+      ? `
+【模型应用型补充】
+- 沿用本阶段已出现的符号与假设，禁止更换记号
+- 凡计算必须给出变量表、已知/求解、每步中间结果（含单位）与一句数量级验算
+- 练习题按 system 中的配比：2 道概念选择题 + 1 道计算选择题`
+      : "";
+
   return `请为第 ${dayNumber} 天（共 ${totalDays} 天）生成详细的学习内容。
 
 【整体目标】${planGoal}
@@ -65,11 +74,12 @@ ${today.keywords ? `【关键词】${today.keywords}` : ""}
 【可测量目标】${objective}
 ${today.prerequisites ? `【前置要求】${today.prerequisites}` : ""}
 ${today.difficulty ? `【难度级别】${today.difficulty}` : ""}
+${modelApplyExtra}
 
 请用中文输出 Markdown，严格遵循 system prompt 中的章节结构要求（含当前阶段专用结构）。
 「本阶段内容结构」的每一条须对应一个 ## 二级标题，以便阅读页生成本章目录。
 开场钩子与比喻须与 system 中本课变体一致，避免每天使用相同套话。
-内容须与今日主题和阶段目标一致，体现循序渐进；若适用，包含代码示例、应用场景、练习与小结。`;
+内容须与今日主题和阶段目标一致，体现循序渐进。`;
 }
 
 export type { OutlineItem };

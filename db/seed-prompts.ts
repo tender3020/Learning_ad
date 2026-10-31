@@ -512,7 +512,14 @@ const CONTENT_COMPONENTS: ComponentSeed[] = [
     "你是一位优秀的商业分析导师。",
     "模型应用型",
     "学习建议：模型是分析工具，学完立刻找现实案例套用。会解释新闻才算真学会。",
-    "\n要求：案例贴近现实，Markdown 格式输出。",
+    `\n要求：案例贴近现实；变量关系或情景树可用 \\\`\\\`\\\`mermaid 代码块；Markdown 格式输出。
+沿用本阶段已出现的符号与假设，禁止中途更换记号；凡计算必须给出中间结果与单位。
+
+【练习题配比 · 覆盖下方公共「3-5 道」要求】
+文末只嵌入 3 道选择题（仍用 <!-- quiz --> 格式）：
+1) 2 道概念题（假设、变量含义、适用边界）
+2) 1 道计算题：题干给出与正文算例一致或同源的数字，干扰项须为合理错算结果（漏单位换算、漏中间步、用错公式）
+禁止再额外堆概念题凑满 5 道。`,
   ),
   contentBase(
     "perception",
@@ -572,25 +579,38 @@ function buildContentTemplateItems(typeKey: string): TemplateSeed["items"] {
     { componentKey: `type:content:${typeKey}`, slot: "system", sort: 1 },
   ];
 
+  let sort = 2;
   for (let i = 1; i <= phaseCount; i++) {
-    items.push({
-      componentKey: `phase:content:${typeKey}:${i}`,
-      slot: "system",
-      sort: 1 + i,
-    });
+    if (typeKey === "model_apply") {
+      // A/B 均挂上模板；运行时 filterByPhase 按阶段内天数奇偶只留一份
+      items.push(
+        { componentKey: `phase:content:${typeKey}:${i}:A`, slot: "system", sort: sort++ },
+        { componentKey: `phase:content:${typeKey}:${i}:B`, slot: "system", sort: sort++ },
+      );
+    } else {
+      items.push({
+        componentKey: `phase:content:${typeKey}:${i}`,
+        slot: "system",
+        sort: sort++,
+      });
+    }
   }
 
-  const tailBase = 2 + phaseCount;
+  const useMermaid =
+    typeKey === "abstract_logic" ||
+    typeKey === "operation_logic" ||
+    typeKey === "model_apply";
+
   items.push(
-    { componentKey: "common:content:section_format", slot: "system", sort: tailBase },
-    { componentKey: "common:content:constraints", slot: "system", sort: tailBase + 1 },
-    ...(typeKey === "abstract_logic" || typeKey === "operation_logic"
-      ? [{ componentKey: "common:content:mermaid", slot: "system" as const, sort: tailBase + 2 }]
+    { componentKey: "common:content:section_format", slot: "system", sort: sort++ },
+    { componentKey: "common:content:constraints", slot: "system", sort: sort++ },
+    ...(useMermaid
+      ? [{ componentKey: "common:content:mermaid", slot: "system" as const, sort: sort++ }]
       : []),
     {
       componentKey: "common:content:quiz_format",
       slot: "system",
-      sort: tailBase + (typeKey === "abstract_logic" || typeKey === "operation_logic" ? 3 : 2),
+      sort: sort++,
     },
   );
 
@@ -654,13 +674,13 @@ const TEMPLATES: TemplateSeed[] = [
       { componentKey: "common:outline:format", slot: "system", sort: 4 },
     ],
   })),
-  // 每日内容模板 × 7（mermaid 提示仅抽象逻辑/操作逻辑需要）
+  // 每日内容模板 × 7（mermaid：抽象逻辑/操作逻辑/模型应用；模型应用温度更低以稳数字）
   ...TYPE_KEYS.map((typeKey): TemplateSeed => ({
     key: `content:${typeKey}`,
     typeKey,
     purpose: "content",
     name: `${TYPES.find((t) => t.key === typeKey)?.name}-每日内容生成`,
-    temperature: 0.7,
+    temperature: typeKey === "model_apply" ? 0.4 : 0.7,
     maxTokens: 8192,
     responseFormat: "stream",
     items: buildContentTemplateItems(typeKey),
