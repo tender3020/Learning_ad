@@ -53,11 +53,22 @@ function substitute(text: string, vars: PromptVars): string {
   });
 }
 
+type PhaseContext = {
+  phaseOrder: number;
+  phaseName: string;
+  phaseGoal: string;
+  phaseHints: string;
+  /** 阶段内第几天（从 1 起）；无法推算时为 1 */
+  dayInPhase: number;
+  /** 模型应用型 A/B 轮换；其他类型忽略 */
+  phaseVariant: "A" | "B";
+};
+
 function resolvePhaseContext(
   typeKey: string | undefined,
   vars: PromptVars,
   ctx: AssembleContext,
-): { phaseOrder: number; phaseName: string; phaseGoal: string; phaseHints: string } {
+): PhaseContext {
   const dayNumber = ctx.dayNumber ?? Number(vars.dayNumber ?? 1);
   const totalDays = Number(vars.totalDays ?? 0);
   let phaseOrder = ctx.phaseOrder ?? Number(vars.phaseOrder ?? 0);
@@ -69,11 +80,14 @@ function resolvePhaseContext(
         ? phases.find((p) => p.order === phaseOrder)
         : getPhaseForDay(phases, dayNumber);
     if (phase) {
+      const dayInPhase = Math.max(1, dayNumber - phase.startDay + 1);
       return {
         phaseOrder: phase.order,
         phaseName: String(vars.phaseName ?? phase.name),
         phaseGoal: String(vars.phaseGoal ?? phase.goal),
         phaseHints: phase.topicHints.join("、"),
+        dayInPhase,
+        phaseVariant: dayInPhase % 2 === 1 ? "A" : "B",
       };
     }
   }
@@ -83,6 +97,8 @@ function resolvePhaseContext(
     phaseName: String(vars.phaseName ?? "当前阶段"),
     phaseGoal: String(vars.phaseGoal ?? ""),
     phaseHints: "",
+    dayInPhase: 1,
+    phaseVariant: "A",
   };
 }
 
@@ -114,17 +130,34 @@ function deriveVars(
   return derived;
 }
 
-/** 从 component_key 解析阶段序号，如 phase:content:model_apply:3 → 3 */
+/** 从 component_key 解析阶段序号，如 phase:content:model_apply:3 或 ...:3:A → 3 */
 function parsePhaseFromKey(componentKey: string): number | null {
-  const match = componentKey.match(/^phase:content:[^:]+:(\d+)$/);
+  const match = componentKey.match(/^phase:content:[^:]+:(\d+)(?::[AB])?$/);
   return match ? Number(match[1]) : null;
 }
 
-/** phase:content:* 片段仅在对应阶段生效；其余片段始终保留 */
-function filterByPhase(parts: ComponentPart[], phaseOrder: number): ComponentPart[] {
+/** 解析 A/B 变体；无后缀则返回 null（非轮换片段） */
+function parsePhaseVariantFromKey(componentKey: string): "A" | "B" | null {
+  const match = componentKey.match(/^phase:content:[^:]+:\d+:([AB])$/);
+  return match ? (match[1] as "A" | "B") : null;
+}
+
+/**
+ * phase:content:* 仅保留当前阶段；
+ * 带 :A/:B 后缀的片段再按阶段内天数奇偶过滤（奇数 A、偶数 B）。
+ */
+function filterByPhase(
+  parts: ComponentPart[],
+  phaseOrder: number,
+  phaseVariant: "A" | "B" = "A",
+): ComponentPart[] {
   return parts.filter((part) => {
     const keyPhase = parsePhaseFromKey(part.componentKey);
-    return keyPhase === null || keyPhase === phaseOrder;
+    if (keyPhase === null) return true;
+    if (keyPhase !== phaseOrder) return false;
+    const keyVariant = parsePhaseVariantFromKey(part.componentKey);
+    if (keyVariant === null) return true;
+    return keyVariant === phaseVariant;
   });
 }
 
@@ -214,8 +247,8 @@ function assemblePartsFromRows(
   }));
 
   if (purpose === "content") {
-    const { phaseOrder } = resolvePhaseContext(typeKey, vars, ctx);
-    parts = filterByPhase(parts, phaseOrder);
+    const { phaseOrder, phaseVariant } = resolvePhaseContext(typeKey, vars, ctx);
+    parts = filterByPhase(parts, phaseOrder, phaseVariant);
   }
 
   parts.sort((a, b) => a.sortOrder - b.sortOrder);
